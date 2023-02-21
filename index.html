@@ -3,8 +3,35 @@
     <head>
         <script type="module">
             import { main } from './build/debug.js'
-            document.body.innerText = main()
+            main(`var t = 6; class MyClass{};`)
+
+            const input = document.getElementById('file-selector')
+            input.addEventListener('change', previewFile)
+
+            function previewFile() {
+                const content = document.querySelector('.content')
+                const [file] = document.querySelector('input[type=file]').files
+                const reader = new FileReader()
+
+                reader.addEventListener(
+                    'load',
+                    () => {
+                        // this will then display a text file
+                        content.innerText = reader.result
+                        const code = reader.result
+                        main(code)
+                    },
+                    false
+                )
+
+                if (file) {
+                    reader.readAsText(file)
+                }
+            }
         </script>
     </head>
-    <body></body>
+    <body>
+        <input type="file" id="file-selector" />
+        <p class="content"></p>
+    </body>
 </html>

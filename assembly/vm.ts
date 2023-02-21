@@ -117,6 +117,8 @@ export function interpret(chunk: Chunk): InterpretResult {
     // we can not store the pointer like this
     // this.ip = this.chunk.code
     // so our ip is just an index and we reference this.chunk.code directly
+    // but set the ip to 0 so it hits the beginning of our chunk of code
+    vm.ip = 0
     return run()
 }
 

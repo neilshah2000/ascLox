@@ -3,7 +3,8 @@ import { Chunk, OpCode } from './chunk'
 import { disassembleChunk } from './debug'
 import { interpret, freeVM, initVM } from './vm'
 
-export function main(): void {
+export function main(code: string): void {
+    console.log(`code: ${code}`)
     initVM()
     const chunk: Chunk = new Chunk()
 
