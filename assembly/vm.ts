@@ -1,8 +1,9 @@
 import { Chunk, OpCode } from './chunk'
 import { disassembleInstruction } from './debug'
 import { printValueToString, Value } from './value'
+import { compile } from './compiler'
 
-enum InterpretResult {
+export enum InterpretResult {
     INTERPRET_OK,
     INTERPRET_COMPILE_ERROR,
     INTERPRET_RUNTIME_ERROR,
@@ -14,7 +15,7 @@ export class VM {
     chunk: Chunk = new Chunk()
     //// different from clox. we dont have pointers so we just store and use the index
     //// instead of dereference the pointer (*ip), we use the ip array index (this.chunk.code[ip])
-    ip: u8 = 0 // location of instruction currently being executed
+    ip: u16 = 0 // location of instruction currently being executed
     stack: StaticArray<Value> = new StaticArray<Value>(STACK_MAX).fill(1.0)
     stackTop: i32 = 0 // points to the next empty slot in the stack
 }
@@ -112,14 +113,17 @@ export function run(): InterpretResult {
 }
 
 // removed chunk as argument
-export function interpret(chunk: Chunk): InterpretResult {
-    vm.chunk = chunk
-    // we can not store the pointer like this
-    // this.ip = this.chunk.code
-    // so our ip is just an index and we reference this.chunk.code directly
-    // but set the ip to 0 so it hits the beginning of our chunk of code
-    vm.ip = 0
-    return run()
+export function interpret(source: string): InterpretResult {
+    // vm.chunk = chunk
+    // // we can not store the pointer like this
+    // // this.ip = this.chunk.code
+    // // so our ip is just an index and we reference this.chunk.code directly
+    // // but set the ip to 0 so it hits the beginning of our chunk of code
+    // vm.ip = 0
+    // return run()
+    console.log('interpreting code')
+    compile(source)
+    return InterpretResult.INTERPRET_OK
 }
 
 // global variable. TODO: use @global decorator??
