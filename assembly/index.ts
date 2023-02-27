@@ -6,7 +6,10 @@ import { storeCodeString } from './memory'
 
 export function main(code: string): void {
     // store this in linear memory and use pointers to reference it
-    console.log(`code: ${code}`)
+    console.log()
+    console.log()
+    console.log(`== source code ==`)
+    console.log(code)
 
     initVM()
 

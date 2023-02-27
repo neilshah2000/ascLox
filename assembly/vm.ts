@@ -1,7 +1,7 @@
 import { Chunk, OpCode } from './chunk'
 import { disassembleInstruction } from './debug'
 import { printValueToString, Value } from './value'
-import { compile } from './compiler'
+import { compile, printTokens } from './compiler'
 
 export enum InterpretResult {
     INTERPRET_OK,
@@ -64,10 +64,12 @@ export function run(): InterpretResult {
         push(operatorFn(a, b))
     }
 
+    console.log()
+    console.log(`== executing bytecode in VM ==`)
     while (true) {
         ////////////////// debugging chunks at runtime
         // DEBUG_TRACE_EXECUTION
-        let stackPrint = '\t\t\t\t'
+        let stackPrint = '\t\t\t  stack->\t'
         for (let slot = 0; slot < vm.stackTop; slot++) {
             const valStr: string = printValueToString(vm.stack[slot])
             stackPrint = stackPrint + `[${valStr}]`
@@ -114,16 +116,22 @@ export function run(): InterpretResult {
 
 // removed chunk as argument
 export function interpret(source: string): InterpretResult {
-    // vm.chunk = chunk
-    // // we can not store the pointer like this
-    // // this.ip = this.chunk.code
-    // // so our ip is just an index and we reference this.chunk.code directly
-    // // but set the ip to 0 so it hits the beginning of our chunk of code
-    // vm.ip = 0
-    // return run()
-    console.log('interpreting code')
-    compile(source)
-    return InterpretResult.INTERPRET_OK
+    printTokens(source) // testing the scanner
+
+    const chunk: Chunk = new Chunk()
+
+    if (!compile(source, chunk)) {
+        // free chunk
+        return InterpretResult.INTERPRET_COMPILE_ERROR
+    }
+
+    vm.chunk = chunk
+    vm.ip = 0
+
+    const result: InterpretResult = run()
+
+    // free chunk
+    return result
 }
 
 // global variable. TODO: use @global decorator??

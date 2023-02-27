@@ -27,7 +27,7 @@ export class Chunk {
         this.constants = new ValueArray()
     }
 
-    writeChunk(byte: u8, line: i16): void {
+    writeChunk(byte: i32, line: u16): void {
         if (this.capacity < this.count + 1) {
             const oldCapacity: i32 = this.capacity
             this.capacity = GROW_CAPACITY(oldCapacity)
@@ -35,14 +35,16 @@ export class Chunk {
             this.lines = GROW_UINT16_ARRAY(this.lines, oldCapacity, this.capacity)
         }
 
-        this.code[this.count] = byte
+        // argument is i32 to accept enums, but we only store u8
+        this.code[this.count] = <u8>byte
         this.lines[this.count] = line
         this.count++
     }
 
-    addConstant(value: Value): i32 {
+    // bytecode chunks are u8, so max index they can reference in the value array is 256
+    addConstant(value: Value): u8 {
         this.constants.writeValueArray(value)
-        return this.constants.count - 1
+        return <u8>this.constants.count - 1 // shouldn't get more that 256 constants because compiler.makeConstant() limites it at runtime
     }
 
     freeChunk(): void {

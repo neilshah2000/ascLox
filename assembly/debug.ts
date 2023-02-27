@@ -9,7 +9,7 @@ const simpleInstruction = (name: string, offset: u32): u32 => {
 const constantInstruction = (name: string, chunk: Chunk, offset: u32): u32 => {
     const constant: u8 = chunk.code[offset + 1]
     const valueToString = printValueToString(chunk.constants.values[constant])
-    console.log(`${name} \t\t\t${constant} \t\t\t'${valueToString}'`)
+    console.log(`${name} \t\t\t\t\t${constant} \t\t\t\t\t'${valueToString}'`)
     return offset + 2
 }
 
@@ -18,9 +18,9 @@ export const disassembleInstruction = (chunk: Chunk, offset: u32): u32 => {
     // line number, or | if the line number is same as previous
     let info = ''
     if (offset > 0 && chunk.lines[offset] == chunk.lines[offset - 1]) {
-        info = `${offset}  \t\t|  \t\t`
+        info = `${offset}  \t\t\t|  \t\t\t`
     } else {
-        info = `${offset}  \t\t${chunk.lines[offset]}\t\t`
+        info = `${offset}  \t\t\t${chunk.lines[offset]}\t\t\t`
     }
 
     const instruction: u8 = chunk.code[offset]
@@ -54,6 +54,7 @@ export const disassembleInstruction = (chunk: Chunk, offset: u32): u32 => {
 }
 
 export const disassembleChunk = (chunk: Chunk, name: string): void => {
+    console.log()
     console.log(`== ${name} ==`)
     console.log('offset  \tline no.  \t bytecode instruction name  \tconstant index  \tconstant value')
     for (let offset = 0; offset < chunk.count; ) {
