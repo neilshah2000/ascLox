@@ -28,6 +28,24 @@ export const disassembleInstruction = (chunk: Chunk, offset: u32): u32 => {
         case OpCode.OP_CONSTANT: {
             return constantInstruction(`${info} OP_CONSTANT`, chunk, offset)
         }
+        case OpCode.OP_NIL: {
+            return simpleInstruction(`${info} OP_NIL`, offset)
+        }
+        case OpCode.OP_TRUE: {
+            return simpleInstruction(`${info} OP_TRUE`, offset)
+        }
+        case OpCode.OP_FALSE: {
+            return simpleInstruction(`${info} OP_FALSE`, offset)
+        }
+        case OpCode.OP_EQUAL: {
+            return simpleInstruction(`${info} OP_EQUAL`, offset)
+        }
+        case OpCode.OP_GREATER: {
+            return simpleInstruction(`${info} OP_GREATER`, offset)
+        }
+        case OpCode.OP_LESS: {
+            return simpleInstruction(`${info} OP_LESS`, offset)
+        }
         case OpCode.OP_ADD: {
             return simpleInstruction(`${info} OP_ADD`, offset)
         }
@@ -39,6 +57,9 @@ export const disassembleInstruction = (chunk: Chunk, offset: u32): u32 => {
         }
         case OpCode.OP_DIVIDE: {
             return simpleInstruction(`${info} OP_DIVIDE`, offset)
+        }
+        case OpCode.OP_NOT: {
+            return simpleInstruction(`${info} OP_NOT`, offset)
         }
         case OpCode.OP_NEGATE: {
             return simpleInstruction(`${info} OP_NEGATE`, offset)

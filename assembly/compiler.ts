@@ -1,6 +1,6 @@
 import { Token, TokenType, initScanner, scanToken, tokenTypeStrings } from './scanner'
 import { Chunk, OpCode } from './chunk'
-import { Value } from './value'
+import { NUMBER_VAL, Value } from './value'
 import { disassembleChunk } from './debug'
 
 class Parser {
@@ -60,7 +60,7 @@ function errorAt(token: Token, message: string): void {
         errorStr = errorStr + ` at ${token.lexeme}`
     }
 
-    console.log(errorStr)
+    console.log(`${errorStr}: ${message}`)
     parser.hadError = true
 }
 
@@ -170,6 +170,24 @@ function binary(): void {
     const rule: ParseRule = getRule(operatorType)
     parsePrecedence(<Precedence>(rule.precedence + 1))
     switch (operatorType) {
+        case TokenType.TOKEN_BANG_EQUAL:
+            emitBytes(OpCode.OP_EQUAL, OpCode.OP_NOT)
+            break
+        case TokenType.TOKEN_EQUAL_EQUAL:
+            emitByte(OpCode.OP_EQUAL)
+            break
+        case TokenType.TOKEN_GREATER:
+            emitByte(OpCode.OP_GREATER)
+            break
+        case TokenType.TOKEN_GREATER_EQUAL:
+            emitBytes(OpCode.OP_LESS, OpCode.OP_NOT)
+            break
+        case TokenType.TOKEN_LESS:
+            emitByte(OpCode.OP_LESS)
+            break
+        case TokenType.TOKEN_LESS_EQUAL:
+            emitBytes(OpCode.OP_GREATER, OpCode.OP_NOT)
+            break
         case TokenType.TOKEN_PLUS:
             emitByte(OpCode.OP_ADD)
             break
@@ -187,6 +205,25 @@ function binary(): void {
     }
 }
 
+function literal(): void {
+    switch (parser.previous.type) {
+        case TokenType.TOKEN_FALSE: {
+            emitByte(OpCode.OP_FALSE)
+            break
+        }
+        case TokenType.TOKEN_NIL: {
+            emitByte(OpCode.OP_NIL)
+            break
+        }
+        case TokenType.TOKEN_TRUE: {
+            emitByte(OpCode.OP_TRUE)
+            break
+        }
+        default:
+            return // Unreachable.
+    }
+}
+
 function grouping(): void {
     expression()
     consume(TokenType.TOKEN_RIGHT_PAREN, "Expect ')' after expression.")
@@ -194,7 +231,7 @@ function grouping(): void {
 
 function number(): void {
     const value: f64 = parseFloat(parser.previous.lexeme)
-    emitConstant(value)
+    emitConstant(NUMBER_VAL(value))
 }
 
 function unary(): void {
@@ -205,6 +242,9 @@ function unary(): void {
 
     // Emit the operator instruction.
     switch (operatorType) {
+        case TokenType.TOKEN_BANG:
+            emitByte(OpCode.OP_NOT)
+            break
         case TokenType.TOKEN_MINUS:
             emitByte(OpCode.OP_NEGATE)
             break
@@ -239,17 +279,17 @@ rules[TokenType.TOKEN_NUMBER] = new ParseRule(number, null, Precedence.PREC_NONE
 rules[TokenType.TOKEN_AND] = new ParseRule(null, null, Precedence.PREC_AND)
 rules[TokenType.TOKEN_CLASS] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_ELSE] = new ParseRule(null, null, Precedence.PREC_NONE)
-rules[TokenType.TOKEN_FALSE] = new ParseRule(null, null, Precedence.PREC_NONE)
+rules[TokenType.TOKEN_FALSE] = new ParseRule(literal, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_FOR] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_FUN] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_IF] = new ParseRule(null, null, Precedence.PREC_NONE)
-rules[TokenType.TOKEN_NIL] = new ParseRule(null, null, Precedence.PREC_NONE)
+rules[TokenType.TOKEN_NIL] = new ParseRule(literal, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_OR] = new ParseRule(null, null, Precedence.PREC_OR)
 rules[TokenType.TOKEN_PRINT] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_RETURN] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_SUPER] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_THIS] = new ParseRule(null, null, Precedence.PREC_NONE)
-rules[TokenType.TOKEN_TRUE] = new ParseRule(null, null, Precedence.PREC_NONE)
+rules[TokenType.TOKEN_TRUE] = new ParseRule(literal, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_VAR] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_WHILE] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_ERROR] = new ParseRule(null, null, Precedence.PREC_NONE)
