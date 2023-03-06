@@ -1,14 +1,3 @@
-import { Chunk, OpCode } from './chunk'
-import { disassembleInstruction } from './debug'
-import { AS_BOOL, AS_NUMBER, BOOL_VAL, IS_BOOL, IS_NIL, IS_NUMBER, NIL_VAL, NUMBER_VAL, printValueToString, Value, valuesEqual, ValueType } from './value'
-import { compile, printTokens } from './compiler'
-
-export enum InterpretResult {
-    INTERPRET_OK,
-    INTERPRET_COMPILE_ERROR,
-    INTERPRET_RUNTIME_ERROR,
-}
-
 const STACK_MAX = 256
 
 export class VM {
@@ -18,10 +7,51 @@ export class VM {
     ip: u16 = 0 // location of instruction currently being executed
     stack: StaticArray<Value> = new StaticArray<Value>(STACK_MAX).fill(new Value())
     stackTop: i32 = 0 // points to the next empty slot in the stack
+    objects: Obj | null = null
+}
+
+// global variable. TODO: use @global decorator??
+export let vm: VM = new VM()
+
+//////// declare vm early ////////////////////
+
+import { Chunk, OpCode } from './chunk'
+import { disassembleInstruction, traverseAndPrintObjects } from './debug'
+import {
+    AS_BOOL,
+    AS_NUMBER,
+    BOOL_VAL,
+    IS_BOOL,
+    IS_NIL,
+    IS_NUMBER,
+    NIL_VAL,
+    NUMBER_VAL,
+    OBJ_VAL,
+    printValueToString,
+    Value,
+    valuesEqual,
+    ValueType,
+} from './value'
+import { compile, printTokens } from './compiler'
+import { AS_STRING, IS_STRING, Obj, ObjString, takeString } from './object'
+import { freeObjects } from './memory'
+
+export enum InterpretResult {
+    INTERPRET_OK,
+    INTERPRET_COMPILE_ERROR,
+    INTERPRET_RUNTIME_ERROR,
+}
+
+function printObjects(): void {
+    console.log()
+    console.log(`== objects ==`)
+    traverseAndPrintObjects(vm.objects)
+    console.log()
 }
 
 function resetStack(): void {
     vm.stackTop = 0
+    vm.objects = null
 }
 
 function runtimeError(format: string): void {
@@ -36,14 +66,12 @@ function runtimeError(format: string): void {
 }
 
 export function initVM(): void {
-    // vm.stack = new StaticArray<Value>(STACK_MAX).fill(1.0)
     resetStack()
-    // for (let i = 0; i < vm.stack.length; ++i) {
-    //     vm.stack[i] = 0.0
-    // }
 }
 
-export function freeVM(): void {}
+export function freeVM(): void {
+    freeObjects()
+}
 
 export function push(value: Value): void {
     // console.log(`push value ${printValueToString(value)}`)
@@ -64,6 +92,15 @@ function peek(distance: i32): Value {
 
 function isFalsey(value: Value): bool {
     return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value))
+}
+
+function concatenate(): void {
+    const b: ObjString = AS_STRING(pop())
+    const a: ObjString = AS_STRING(pop())
+    // in c need to allocate array and copy 2 strings in
+    const chars: string = a.chars.concat(b.chars)
+    const result: ObjString = takeString(chars)
+    push(OBJ_VAL(result))
 }
 
 export function run(): InterpretResult {
@@ -151,10 +188,16 @@ export function run(): InterpretResult {
                 break
             }
             case OpCode.OP_ADD: {
-                const status = BINARY_NUM_OP((a, b) => a + b)
-                if (status == InterpretResult.INTERPRET_COMPILE_ERROR) {
-                    return status
-                } // else, do nothing carry on looping
+                if (IS_STRING(peek(0)) && IS_STRING(peek(1))) {
+                    concatenate()
+                } else if (IS_NUMBER(peek(0)) && IS_NUMBER(peek(1))) {
+                    const b: f64 = AS_NUMBER(pop())
+                    const a: f64 = AS_NUMBER(pop())
+                    push(NUMBER_VAL(a + b))
+                } else {
+                    runtimeError('Operands must be two numbers or two strings.')
+                    return InterpretResult.INTERPRET_RUNTIME_ERROR
+                }
                 break
             }
             case OpCode.OP_SUBTRACT: {
@@ -211,9 +254,8 @@ export function interpret(source: string): InterpretResult {
 
     const result: InterpretResult = run()
 
+    printObjects()
+
     // free chunk
     return result
 }
-
-// global variable. TODO: use @global decorator??
-export let vm: VM = new VM()

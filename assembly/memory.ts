@@ -1,3 +1,6 @@
+import { Obj, ObjString, ObjType } from './object'
+import { vm } from './vm'
+
 export const GROW_CAPACITY = (capacity: i32): i32 => {
     return capacity < 8 ? 8 : capacity * 2
 }
@@ -28,3 +31,29 @@ export const storeCodeString = (code: string): void => {
     // console.log(`memory stored string2: ${storedString2}`)
     console.log(__heap_base.toString())
 }
+
+export function freeObjects(): void {
+    let object: Obj | null = vm.objects
+    while (object !== null) {
+        const next: Obj | null = object.next
+        // freeObject(object)
+        // for now just set object to next to allow assemblyscript garbage collector to clean up
+        object = next
+    }
+}
+
+// function freeObject(object: Obj):void {
+//     switch (object.type) {
+//         case ObjType.OBJ_STRING: {
+//             const string: ObjString = <ObjString>object
+//             FREE_ARRAY(string.chars)
+//             FREE(object)
+
+//         }
+//     }
+// }
+
+// function FREE() {
+//     // TODO: figure out memory stuff to free
+//     reallocate()
+// }

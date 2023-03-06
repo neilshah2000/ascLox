@@ -1,66 +1,21 @@
+import { AS_AS_STRING, AS_STRING, Obj, ObjString, ObjType, OBJ_TYPE } from './object'
+
 export enum ValueType {
     VAL_BOOL,
     VAL_NIL,
     VAL_NUMBER,
+    VAL_OBJ,
 }
 
 class As {
     boolean: bool = false
     number: f64 = 0
-
-    // constructor(value: bool | f64) {
-    //     if (isBoolean(value)) {
-    //         this.boolean = value
-    //     }
-    //     if (isFloat(value)) {
-    //         this.number = value
-    //     }
-    // }
+    obj: Obj = new Obj()
 }
 
 export class Value {
     type: ValueType = ValueType.VAL_NIL
     myAs: As = new As()
-    // nil: bool = false
-
-    // constructors
-    // constructor(value: bool | null | f64) {
-    //     if (isBoolean(value)) {
-    //         this.type = ValueType.VAL_BOOL
-    //         this.as = new As(value)
-    //     } else if (isFloat(value)) {
-    //         this.type = ValueType.VAL_NUMBER
-    //         this.as = new As(value)
-    //     } else {
-    //         this.type = ValueType.VAL_NIL
-    //         this.as = new As(false)
-    //         this.nil = true
-    //     }
-    // }
-
-    // AS_BOOL() {
-    //     return this.as.boolean
-    // }
-
-    // AS_NUMBER() {
-    //     return this.as.number
-    // }
-
-    // IS_BOOL() {
-    //     return this.type === ValueType.VAL_BOOL
-    // }
-
-    // IS_NIL() {
-    //     return this.type === ValueType.VAL_NIL
-    // }
-
-    // IS_NUMBER() {
-    //     return this.type === ValueType.VAL_NUMBER
-    // }
-
-    // toString() {
-    //     return this.AS_NUMBER().toString()
-    // }
 }
 
 // constructors
@@ -84,6 +39,13 @@ export function NUMBER_VAL(value: f64): Value {
     return val
 }
 
+export function OBJ_VAL(obj: Obj): Value {
+    const val = new Value()
+    val.type = ValueType.VAL_OBJ
+    val.myAs.obj = obj
+    return val
+}
+
 // convert back to web assembly types
 export function AS_BOOL(value: Value): bool {
     return value.myAs.boolean
@@ -91,6 +53,10 @@ export function AS_BOOL(value: Value): bool {
 
 export function AS_NUMBER(value: Value): f64 {
     return value.myAs.number
+}
+
+export function AS_OBJ(value: Value): Obj {
+    return value.myAs.obj
 }
 
 // test the type of the Value
@@ -106,15 +72,31 @@ export function IS_NUMBER(value: Value): bool {
     return value.type === ValueType.VAL_NUMBER
 }
 
+export function IS_OBJ(value: Value): bool {
+    return value.type === ValueType.VAL_OBJ
+}
+
+function objectToString(objectValue: Value): string {
+    switch (OBJ_TYPE(objectValue)) {
+        case ObjType.OBJ_STRING:
+            return AS_AS_STRING(objectValue)
+        default:
+            return '' // should be unreachable
+    }
+}
+
 export function valToString(value: Value): string {
-    if (IS_BOOL(value)) {
-        return value.myAs.boolean ? 'true' : 'false'
-    } else if (IS_NUMBER(value)) {
-        return value.myAs.number.toString()
-    } else if (IS_NIL(value)) {
-        return 'nil'
-    } else {
-        return 'unknown type'
+    switch (value.type) {
+        case ValueType.VAL_BOOL:
+            return value.myAs.boolean ? 'true' : 'false'
+        case ValueType.VAL_NIL:
+            return 'nil'
+        case ValueType.VAL_NUMBER:
+            return value.myAs.number.toString()
+        case ValueType.VAL_OBJ:
+            return objectToString(value)
+        default:
+            return '' // should be unreachable
     }
 }
 
@@ -157,6 +139,12 @@ export function valuesEqual(a: Value, b: Value): bool {
             return true
         case ValueType.VAL_NUMBER:
             return AS_NUMBER(a) === AS_NUMBER(b)
+        case ValueType.VAL_OBJ: {
+            const aString: ObjString = AS_STRING(a)
+            const bString: ObjString = AS_STRING(b)
+            // use assemblyscript string compare instead of c style direct char array comparison
+            return aString.chars === bString.chars
+        }
         default:
             return false // Unreachable.
     }

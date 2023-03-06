@@ -1,4 +1,5 @@
 import { Chunk, OpCode } from './chunk'
+import { Obj, ObjString, ObjType } from './object'
 import { printValueToString } from './value'
 
 const simpleInstruction = (name: string, offset: u32): u32 => {
@@ -8,7 +9,7 @@ const simpleInstruction = (name: string, offset: u32): u32 => {
 
 const constantInstruction = (name: string, chunk: Chunk, offset: u32): u32 => {
     const constant: u8 = chunk.code[offset + 1]
-    const valueToString = printValueToString(chunk.constants.values[constant])
+    const valueToString: string = printValueToString(chunk.constants.values[constant])
     console.log(`${name} \t\t\t\t\t${constant} \t\t\t\t\t'${valueToString}'`)
     return offset + 2
 }
@@ -81,5 +82,23 @@ export const disassembleChunk = (chunk: Chunk, name: string): void => {
     for (let offset = 0; offset < chunk.count; ) {
         // disassembleInstruction increments the offset because instructions can have different sizes
         offset = disassembleInstruction(chunk, offset)
+    }
+}
+
+// traverse linked list of objects
+// print each one in the list
+export function traverseAndPrintObjects(start: Obj | null): void {
+    let next = start
+    while (next !== null) {
+        const type = next.type
+        switch (type) {
+            case ObjType.OBJ_STRING:
+                const myStringObj = <ObjString>next
+                console.log(myStringObj.chars)
+                break
+            default:
+                console.log('object not recognised')
+        }
+        next = next.next
     }
 }

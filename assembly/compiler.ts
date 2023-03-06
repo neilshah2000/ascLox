@@ -1,7 +1,8 @@
 import { Token, TokenType, initScanner, scanToken, tokenTypeStrings } from './scanner'
 import { Chunk, OpCode } from './chunk'
-import { NUMBER_VAL, Value } from './value'
+import { NUMBER_VAL, OBJ_VAL, Value } from './value'
 import { disassembleChunk } from './debug'
+import { copyString } from './object'
 
 class Parser {
     current: Token = new Token()
@@ -234,6 +235,12 @@ function number(): void {
     emitConstant(NUMBER_VAL(value))
 }
 
+function mString(): void {
+    // trim leading and trailing quotation marks
+    const myString = parser.previous.lexeme.substring(1, parser.previous.lexeme.length - 1)
+    emitConstant(OBJ_VAL(copyString(myString)))
+}
+
 function unary(): void {
     const operatorType: TokenType = parser.previous.type
 
@@ -274,7 +281,7 @@ rules[TokenType.TOKEN_GREATER_EQUAL] = new ParseRule(null, binary, Precedence.PR
 rules[TokenType.TOKEN_LESS] = new ParseRule(null, binary, Precedence.PREC_COMPARISON)
 rules[TokenType.TOKEN_LESS_EQUAL] = new ParseRule(null, binary, Precedence.PREC_COMPARISON)
 rules[TokenType.TOKEN_IDENTIFIER] = new ParseRule(null, null, Precedence.PREC_NONE)
-rules[TokenType.TOKEN_STRING] = new ParseRule(null, null, Precedence.PREC_NONE)
+rules[TokenType.TOKEN_STRING] = new ParseRule(mString, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_NUMBER] = new ParseRule(number, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_AND] = new ParseRule(null, null, Precedence.PREC_AND)
 rules[TokenType.TOKEN_CLASS] = new ParseRule(null, null, Precedence.PREC_NONE)
