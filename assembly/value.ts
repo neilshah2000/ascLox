@@ -140,10 +140,8 @@ export function valuesEqual(a: Value, b: Value): bool {
         case ValueType.VAL_NUMBER:
             return AS_NUMBER(a) === AS_NUMBER(b)
         case ValueType.VAL_OBJ: {
-            const aString: ObjString = AS_STRING(a)
-            const bString: ObjString = AS_STRING(b)
-            // use assemblyscript string compare instead of c style direct char array comparison
-            return aString.chars === bString.chars
+            // these should be interned strings now so can do direct reference comparison
+            return AS_OBJ(a) === AS_OBJ(b)
         }
         default:
             return false // Unreachable.

@@ -1,4 +1,5 @@
-import { AS_OBJ, IS_OBJ, Value } from './value'
+import { tableFindString, tableSet } from './table'
+import { AS_OBJ, IS_OBJ, NIL_VAL, Value } from './value'
 import { vm } from './vm'
 
 export enum ObjType {
@@ -12,6 +13,7 @@ export class Obj {
 
 export class ObjString extends Obj {
     length: i32 = 0
+    // do not store hash, we dont build our own hashtable
     chars: string = ''
 }
 
@@ -43,6 +45,14 @@ export function copyString(myString: string): ObjString {
     // bunch of memory stiff happens here in c
     // we need to allcoate the string char array (p347)
     // take a copy of the string so original is left intact
+
+    // check if we already store it
+    const interned: ObjString | null = tableFindString(vm.strings, myString)
+    if (interned !== null) {
+        console.log('return interned string for copy')
+        return interned
+    }
+
     const copy: string = myString.slice(0)
     return allocateString(copy)
 }
@@ -50,12 +60,22 @@ export function copyString(myString: string): ObjString {
 // takes ownership of the original string
 // does not copy it
 export function takeString(myString: string): ObjString {
+    // check if we already store it
+    const interned: ObjString | null = tableFindString(vm.strings, myString)
+    if (interned !== null) {
+        console.log('return interned string for take')
+        // FREE_ARRAY for the original string in cLox
+        return interned
+    }
+
     return allocateString(myString)
 }
 
 function allocateString(myString: string): ObjString {
     const allocatedString: ObjString = <ObjString>ALLOCATE_OBJ(ObjType.OBJ_STRING)
     allocatedString.chars = myString
+    // using table list a hash set here
+    tableSet(vm.strings, allocatedString, NIL_VAL())
     return allocatedString
 }
 
@@ -71,5 +91,28 @@ function ALLOCATE_OBJ(type: ObjType): Obj {
     // update linked list of all objects stored in vm
     obj.next = vm.objects
     vm.objects = obj
+
+    // console.log(`== allocated object ==`)
+    // traversePrintObjects(obj)
+
+    assert(obj !== null)
+
     return obj
+}
+
+// duplicate
+export function traversePrintObjects(start: Obj | null): void {
+    let next = start
+    while (next !== null) {
+        const type = next.type
+        switch (type) {
+            case ObjType.OBJ_STRING:
+                const myStringObj = <ObjString>next
+                console.log(`string: ${myStringObj.chars}`)
+                break
+            default:
+                console.log('object not recognised')
+        }
+        next = next.next
+    }
 }

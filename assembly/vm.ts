@@ -7,6 +7,7 @@ export class VM {
     ip: u16 = 0 // location of instruction currently being executed
     stack: StaticArray<Value> = new StaticArray<Value>(STACK_MAX).fill(new Value())
     stackTop: i32 = 0 // points to the next empty slot in the stack
+    strings: Table = new Map<ObjString, Value>()
     objects: Obj | null = null
 }
 
@@ -35,6 +36,7 @@ import {
 import { compile, printTokens } from './compiler'
 import { AS_STRING, IS_STRING, Obj, ObjString, takeString } from './object'
 import { freeObjects } from './memory'
+import { freeTable, initTable, Table } from './table'
 
 export enum InterpretResult {
     INTERPRET_OK,
@@ -67,9 +69,13 @@ function runtimeError(format: string): void {
 
 export function initVM(): void {
     resetStack()
+
+    // because this line doesnt init the table properly, still have the old value
+    vm.strings = initTable()
 }
 
 export function freeVM(): void {
+    vm.strings = freeTable()
     freeObjects()
 }
 
