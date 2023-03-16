@@ -7,6 +7,7 @@ export class VM {
     ip: u16 = 0 // location of instruction currently being executed
     stack: StaticArray<Value> = new StaticArray<Value>(STACK_MAX).fill(new Value())
     stackTop: i32 = 0 // points to the next empty slot in the stack
+    globals: Table = new Map<ObjString, Value>()
     strings: Table = new Map<ObjString, Value>()
     objects: Obj | null = null
 }
@@ -36,7 +37,7 @@ import {
 import { compile, printTokens } from './compiler'
 import { AS_STRING, IS_STRING, Obj, ObjString, takeString } from './object'
 import { freeObjects } from './memory'
-import { freeTable, initTable, Table } from './table'
+import { freeTable, initTable, Table, tableDelete, tableGet, tableSet } from './table'
 
 export enum InterpretResult {
     INTERPRET_OK,
@@ -70,11 +71,12 @@ function runtimeError(format: string): void {
 export function initVM(): void {
     resetStack()
 
-    // because this line doesnt init the table properly, still have the old value
+    vm.globals = initTable()
     vm.strings = initTable()
 }
 
 export function freeVM(): void {
+    vm.strings = freeTable()
     vm.strings = freeTable()
     freeObjects()
 }
@@ -118,6 +120,10 @@ export function run(): InterpretResult {
         const constant = vm.chunk.constants.values[READ_BYTE()]
         // console.log(`read constant ${constant}`)
         return constant
+    }
+
+    const READ_STRING = (): ObjString => {
+        return AS_STRING(READ_CONSTANT())
     }
 
     const BINARY_BOOL_OP = (operatorFn: (a: f64, b: f64) => bool): InterpretResult => {
@@ -174,6 +180,34 @@ export function run(): InterpretResult {
             case OpCode.OP_FALSE:
                 push(BOOL_VAL(false))
                 break
+            case OpCode.OP_POP:
+                pop()
+                break
+            case OpCode.OP_GET_GLOBAL: {
+                const name: ObjString = READ_STRING()
+                const value: Value | null = tableGet(vm.globals, name)
+                if (value === null) {
+                    runtimeError(`Undefined variable get ${name.chars}.`)
+                    return InterpretResult.INTERPRET_RUNTIME_ERROR
+                }
+                push(value)
+                break
+            }
+            case OpCode.OP_DEFINE_GLOBAL: {
+                const name: ObjString = READ_STRING()
+                tableSet(vm.globals, name, peek(0))
+                pop()
+                break
+            }
+            case OpCode.OP_SET_GLOBAL: {
+                const name: ObjString = READ_STRING()
+                if (tableSet(vm.globals, name, peek(0))) {
+                    tableDelete(vm.globals, name)
+                    runtimeError(`Undefined variable set ${name.chars}.`)
+                    return InterpretResult.INTERPRET_RUNTIME_ERROR
+                }
+                break
+            }
             case OpCode.OP_EQUAL:
                 const b: Value = pop()
                 const a: Value = pop()
@@ -237,8 +271,13 @@ export function run(): InterpretResult {
                 }
                 push(NUMBER_VAL(-AS_NUMBER(pop())))
                 break
+            case OpCode.OP_PRINT: {
+                console.log(printValueToString(pop()))
+                break
+            }
             case OpCode.OP_RETURN:
-                console.log(`return ${printValueToString(pop())}`)
+                // console.log(`return ${printValueToString(pop())}`)
+                // exit interpreter
                 return InterpretResult.INTERPRET_OK
         }
     }

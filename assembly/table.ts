@@ -15,7 +15,7 @@ export function freeTable(): Table {
 
 // returns the value if key exists
 // otherwise returns null
-function tableGet(map: Table, key: ObjString): Value | null {
+export function tableGet(map: Table, key: ObjString): Value | null {
     if (map.has(key)) {
         return map.get(key)
     } else {
@@ -25,14 +25,16 @@ function tableGet(map: Table, key: ObjString): Value | null {
 
 // add new entry to the hash table
 // overwrite an old entry if there is one
+// Returns true if a new entry was added
 export function tableSet(map: Table, key: ObjString, value: Value): bool {
+    const existed = map.has(key)
     map.set(key, value)
-    return false
+    return !existed
 }
 
 // if the key exists, deletes the entry and returns true
 // otherwise returns false
-function tableDelete(map: Table, key: ObjString): bool {
+export function tableDelete(map: Table, key: ObjString): bool {
     if (map.has(key)) {
         return map.delete(key)
     } else {

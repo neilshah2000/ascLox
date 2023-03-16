@@ -1,0 +1,5 @@
+// test set undefined variable
+var breakfast = "beignets";
+var beverage = "cafe au lait";
+breakfastUndefined = "beignets with " + beverage;
+print breakfast;

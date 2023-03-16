@@ -25,7 +25,7 @@ enum Precedence {
     PREC_PRIMARY,
 }
 
-type ParseFn = () => void
+type ParseFn = (canAssign: bool) => void
 
 class ParseRule {
     prefix: ParseFn | null
@@ -104,8 +104,11 @@ export function compile(source: string, chunk: Chunk): bool {
     parser.panicMode = false
 
     advance()
-    expression()
-    consume(TokenType.TOKEN_EOF, 'Expect end of expression')
+
+    while (!match(TokenType.TOKEN_EOF)) {
+        declaration()
+    }
+
     endCompiler()
     return !parser.hadError
 }
@@ -128,6 +131,17 @@ function consume(type: TokenType, message: string): void {
     }
 
     errorAtCurrent(message)
+}
+
+function check(type: TokenType): bool {
+    return parser.current.type === type
+}
+
+// consume the token only if it is the correct type
+function match(type: TokenType): bool {
+    if (!check(type)) return false
+    advance()
+    return true
 }
 
 function emitByte(byte: i32): void {
@@ -166,7 +180,7 @@ function endCompiler(): void {
     }
 }
 
-function binary(): void {
+function binary(canAssign: bool): void {
     const operatorType: TokenType = parser.previous.type
     const rule: ParseRule = getRule(operatorType)
     parsePrecedence(<Precedence>(rule.precedence + 1))
@@ -206,7 +220,7 @@ function binary(): void {
     }
 }
 
-function literal(): void {
+function literal(canAssign: bool): void {
     switch (parser.previous.type) {
         case TokenType.TOKEN_FALSE: {
             emitByte(OpCode.OP_FALSE)
@@ -225,23 +239,38 @@ function literal(): void {
     }
 }
 
-function grouping(): void {
+function grouping(canAssign: bool): void {
     expression()
     consume(TokenType.TOKEN_RIGHT_PAREN, "Expect ')' after expression.")
 }
 
-function number(): void {
+function number(canAssign: bool): void {
     const value: f64 = parseFloat(parser.previous.lexeme)
     emitConstant(NUMBER_VAL(value))
 }
 
-function mString(): void {
+function mString(canAssign: bool): void {
     // trim leading and trailing quotation marks
     const myString = parser.previous.lexeme.substring(1, parser.previous.lexeme.length - 1)
     emitConstant(OBJ_VAL(copyString(myString)))
 }
 
-function unary(): void {
+function namedVariable(name: Token, canAssign: bool): void {
+    const arg: u8 = identifierConstant(name)
+
+    if (canAssign && match(TokenType.TOKEN_EQUAL)) {
+        expression()
+        emitBytes(OpCode.OP_SET_GLOBAL, arg)
+    } else {
+        emitBytes(OpCode.OP_GET_GLOBAL, arg)
+    }
+}
+
+function variable(canAssign: bool): void {
+    namedVariable(parser.previous, canAssign)
+}
+
+function unary(canAssign: bool): void {
     const operatorType: TokenType = parser.previous.type
 
     // Compile the operand.
@@ -280,7 +309,7 @@ rules[TokenType.TOKEN_GREATER] = new ParseRule(null, binary, Precedence.PREC_COM
 rules[TokenType.TOKEN_GREATER_EQUAL] = new ParseRule(null, binary, Precedence.PREC_COMPARISON)
 rules[TokenType.TOKEN_LESS] = new ParseRule(null, binary, Precedence.PREC_COMPARISON)
 rules[TokenType.TOKEN_LESS_EQUAL] = new ParseRule(null, binary, Precedence.PREC_COMPARISON)
-rules[TokenType.TOKEN_IDENTIFIER] = new ParseRule(null, null, Precedence.PREC_NONE)
+rules[TokenType.TOKEN_IDENTIFIER] = new ParseRule(variable, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_STRING] = new ParseRule(mString, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_NUMBER] = new ParseRule(number, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_AND] = new ParseRule(null, null, Precedence.PREC_AND)
@@ -310,13 +339,31 @@ function parsePrecedence(precedence: Precedence): void {
         return
     }
 
-    prefixRule()
+    const canAssign: bool = precedence <= Precedence.PREC_ASSIGNMENT
+    prefixRule(canAssign)
 
     while (precedence <= getRule(parser.current.type).precedence) {
         advance()
         const infixRule: ParseFn | null = getRule(parser.previous.type).infix
-        if (infixRule !== null) infixRule()
+        if (infixRule !== null) infixRule(canAssign)
     }
+
+    if (canAssign && match(TokenType.TOKEN_EQUAL)) {
+        error('Invalid assignment target.')
+    }
+}
+
+function identifierConstant(name: Token): u8 {
+    return makeConstant(OBJ_VAL(copyString(name.lexeme)))
+}
+
+function parseVariable(errorMessage: string): u8 {
+    consume(TokenType.TOKEN_IDENTIFIER, errorMessage)
+    return identifierConstant(parser.previous)
+}
+
+function defineVariable(global: u8): void {
+    emitBytes(OpCode.OP_DEFINE_GLOBAL, global)
 }
 
 function getRule(type: TokenType): ParseRule {
@@ -325,4 +372,71 @@ function getRule(type: TokenType): ParseRule {
 
 function expression(): void {
     parsePrecedence(Precedence.PREC_ASSIGNMENT)
+}
+
+function varDeclaration(): void {
+    const global: u8 = parseVariable('Expect variable name')
+
+    if (match(TokenType.TOKEN_EQUAL)) {
+        expression()
+    } else {
+        emitByte(OpCode.OP_NIL)
+    }
+    consume(TokenType.TOKEN_SEMICOLON, "Expect ';' after variable declaration.")
+
+    defineVariable(global)
+}
+
+function expressionStatement(): void {
+    expression()
+    consume(TokenType.TOKEN_SEMICOLON, "Expect ';' after expression.")
+    emitByte(OpCode.OP_POP)
+}
+
+function printStatement(): void {
+    expression()
+    consume(TokenType.TOKEN_SEMICOLON, "Expect ';' after value.")
+    emitByte(OpCode.OP_PRINT)
+}
+
+function synchronize(): void {
+    parser.panicMode = false
+
+    while (parser.current.type !== TokenType.TOKEN_EOF) {
+        if (parser.previous.type === TokenType.TOKEN_SEMICOLON) return
+        switch (parser.current.type) {
+            case TokenType.TOKEN_CLASS:
+            case TokenType.TOKEN_FUN:
+            case TokenType.TOKEN_VAR:
+            case TokenType.TOKEN_FOR:
+            case TokenType.TOKEN_IF:
+            case TokenType.TOKEN_WHILE:
+            case TokenType.TOKEN_PRINT:
+            case TokenType.TOKEN_RETURN:
+                return
+
+            default:
+            // Do nothing.
+        }
+
+        advance()
+    }
+}
+
+function declaration(): void {
+    if (match(TokenType.TOKEN_VAR)) {
+        varDeclaration()
+    } else {
+        statement()
+    }
+
+    if (parser.panicMode) synchronize()
+}
+
+function statement(): void {
+    if (match(TokenType.TOKEN_PRINT)) {
+        printStatement()
+    } else {
+        expressionStatement()
+    }
 }

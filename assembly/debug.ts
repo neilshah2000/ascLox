@@ -38,6 +38,18 @@ export const disassembleInstruction = (chunk: Chunk, offset: u32): u32 => {
         case OpCode.OP_FALSE: {
             return simpleInstruction(`${info} OP_FALSE`, offset)
         }
+        case OpCode.OP_POP: {
+            return simpleInstruction(`${info} OP_POP`, offset)
+        }
+        case OpCode.OP_GET_GLOBAL: {
+            return constantInstruction(`${info} OP_GET_GLOBAL`, chunk, offset)
+        }
+        case OpCode.OP_DEFINE_GLOBAL: {
+            return constantInstruction(`${info} OP_DEFINE_GLOBAL`, chunk, offset)
+        }
+        case OpCode.OP_SET_GLOBAL: {
+            return constantInstruction(`${info} OP_SET_GLOBAL`, chunk, offset)
+        }
         case OpCode.OP_EQUAL: {
             return simpleInstruction(`${info} OP_EQUAL`, offset)
         }
@@ -64,6 +76,9 @@ export const disassembleInstruction = (chunk: Chunk, offset: u32): u32 => {
         }
         case OpCode.OP_NEGATE: {
             return simpleInstruction(`${info} OP_NEGATE`, offset)
+        }
+        case OpCode.OP_PRINT: {
+            return simpleInstruction(`${info} OP_PRINT`, offset)
         }
         case OpCode.OP_RETURN: {
             return simpleInstruction(`${info} OP_RETURN`, offset)
