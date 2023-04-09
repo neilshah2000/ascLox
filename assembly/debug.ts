@@ -7,6 +7,12 @@ const simpleInstruction = (name: string, offset: u32): u32 => {
     return offset + 1
 }
 
+const byteInstruction = (name: string, chunk: Chunk, offset: u32): u32 => {
+    const slot: u8 = chunk.code[offset + 1]
+    console.log(`${name} ${slot}`)
+    return offset + 2
+}
+
 const constantInstruction = (name: string, chunk: Chunk, offset: u32): u32 => {
     const constant: u8 = chunk.code[offset + 1]
     const valueToString: string = printValueToString(chunk.constants.values[constant])
@@ -40,6 +46,12 @@ export const disassembleInstruction = (chunk: Chunk, offset: u32): u32 => {
         }
         case OpCode.OP_POP: {
             return simpleInstruction(`${info} OP_POP`, offset)
+        }
+        case OpCode.OP_GET_LOCAL: {
+            return byteInstruction(`${info} OP_GET_LOCAL`, chunk, offset)
+        }
+        case OpCode.OP_SET_LOCAL: {
+            return byteInstruction(`${info} OP_SET_LOCAL`, chunk, offset)
         }
         case OpCode.OP_GET_GLOBAL: {
             return constantInstruction(`${info} OP_GET_GLOBAL`, chunk, offset)

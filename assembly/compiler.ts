@@ -39,8 +39,21 @@ class ParseRule {
     }
 }
 
+class Local {
+    name: Token = new Token
+    depth: i32 = 0 // numbered nesting level, 0 is global, 1 first top-level ..etc
+}
+
+const U8_COUNT = 256
+class Compiler {
+    locals: Local[] = new Array<Local>(U8_COUNT)
+    localCount: i32 = 0
+    scopeDepth: i32 = 0
+}
+
 // global variable. TODO: use @global decorator??
 let parser: Parser = new Parser()
+let current: Compiler = new Compiler()
 let compilingChunk: Chunk = new Chunk()
 
 function currentChunk(): Chunk {
@@ -98,6 +111,7 @@ export function printTokens(source: string): void {
 
 export function compile(source: string, chunk: Chunk): bool {
     initScanner(source)
+    initCompiler()
     compilingChunk = chunk
 
     parser.hadError = false
@@ -172,6 +186,11 @@ function emitConstant(value: Value): void {
     emitBytes(OpCode.OP_CONSTANT, makeConstant(value))
 }
 
+function initCompiler(): void {
+    current = new Compiler()
+    console.log('init compiler')
+}
+
 function endCompiler(): void {
     emitReturn()
     // TODO: put behind debug flag
@@ -180,10 +199,24 @@ function endCompiler(): void {
     }
 }
 
+function beginScope(): void {
+    current.scopeDepth++
+}
+
+function endScope(): void {
+    current.scopeDepth--
+
+    while (current.localCount > 0 && current.locals[current.localCount - 1].depth > current.scopeDepth) {
+        emitByte(OpCode.OP_POP)
+        current.localCount--
+    }
+}
+
 function binary(canAssign: bool): void {
     const operatorType: TokenType = parser.previous.type
     const rule: ParseRule = getRule(operatorType)
     parsePrecedence(<Precedence>(rule.precedence + 1))
+    console.log('token type ' + operatorType.toString())
     switch (operatorType) {
         case TokenType.TOKEN_BANG_EQUAL:
             emitBytes(OpCode.OP_EQUAL, OpCode.OP_NOT)
@@ -256,17 +289,28 @@ function mString(canAssign: bool): void {
 }
 
 function namedVariable(name: Token, canAssign: bool): void {
-    const arg: u8 = identifierConstant(name)
+    let getOp = 0
+    let setOp = 0
+    let arg: i32 = resolveLocal(current, name)
+    if (arg !== -1) {
+        getOp = OpCode.OP_GET_LOCAL
+        setOp = OpCode.OP_SET_LOCAL
+    } else {
+        arg = identifierConstant(name)
+        getOp = OpCode.OP_GET_GLOBAL
+        setOp = OpCode.OP_SET_GLOBAL
+    }
 
     if (canAssign && match(TokenType.TOKEN_EQUAL)) {
         expression()
-        emitBytes(OpCode.OP_SET_GLOBAL, arg)
+        emitBytes(setOp, <u8>arg)
     } else {
-        emitBytes(OpCode.OP_GET_GLOBAL, arg)
+        emitBytes(getOp, <u8>arg)
     }
 }
 
 function variable(canAssign: bool): void {
+    console.log('variable')
     namedVariable(parser.previous, canAssign)
 }
 
@@ -357,12 +401,88 @@ function identifierConstant(name: Token): u8 {
     return makeConstant(OBJ_VAL(copyString(name.lexeme)))
 }
 
+function identifiersEqual(a: Token, b:Token): bool {
+    return a.lexeme === b.lexeme
+}
+
+function resolveLocal(compiler: Compiler, name: Token): i32 {
+    for (let i: i32 = compiler.localCount - 1; i >= 0; i--) {
+        const local: Local = compiler.locals[i]
+        if (identifiersEqual(name, local.name)) {
+            if (local.depth == -1) {
+                error("Can't read local variable in it's own initializer.")
+            }
+            return i // index in locals array is same as stack slot
+        }
+    }
+
+    return -1
+}
+
+function addLocal(name: Token): void {
+    if (current.localCount === U8_COUNT) {
+        error("Too many local variables in function.")
+        return
+    }
+
+    const local: Local = new Local()
+    // console.log('adding to locals index ' + current.localCount.toString())
+    current.locals[current.localCount] = local
+    // console.log(`current.localCount ${current.localCount}`)
+    current.localCount++
+
+    local.name = name
+    local.depth = -1
+
+    printLocals()
+}
+
+function printLocals(): void {
+    console.log('== local variables ==')
+    // console.log('locals length ' + current.locals.length.toString())
+    for (let i = 0; i < current.localCount; ++i) {
+        console.log(`name: ${current.locals[i].name.lexeme}, depth: ${current.locals[i].depth}`)
+    }
+}
+
+function declareVariable(): void {
+    if (current.scopeDepth === 0) return
+
+    const name: Token = parser.previous
+
+    for (let i = current.localCount - 1; i >= 0; i--) {
+        const local: Local = current.locals[i]
+        if (local.depth != -1 && local.depth < current.scopeDepth) {
+            break
+        }
+
+        if (identifiersEqual(name, local.name)) {
+            error("Already a variable with this name in this scope.")
+        }
+    }
+
+    addLocal(name)
+}
+
 function parseVariable(errorMessage: string): u8 {
     consume(TokenType.TOKEN_IDENTIFIER, errorMessage)
+
+    declareVariable()
+    if (current.scopeDepth > 0) return 0
+
     return identifierConstant(parser.previous)
 }
 
+function markInitialized(): void {
+    current.locals[current.localCount - 1].depth = current.scopeDepth
+}
+
 function defineVariable(global: u8): void {
+    if (current.scopeDepth > 0) {
+        markInitialized()
+        return
+    }
+
     emitBytes(OpCode.OP_DEFINE_GLOBAL, global)
 }
 
@@ -372,6 +492,14 @@ function getRule(type: TokenType): ParseRule {
 
 function expression(): void {
     parsePrecedence(Precedence.PREC_ASSIGNMENT)
+}
+
+function block(): void {
+    while (!check(TokenType.TOKEN_RIGHT_BRACE) && !check(TokenType.TOKEN_EOF)) {
+        declaration()
+    }
+
+    consume(TokenType.TOKEN_RIGHT_BRACE, "Expect '}' after block.")
 }
 
 function varDeclaration(): void {
@@ -436,6 +564,10 @@ function declaration(): void {
 function statement(): void {
     if (match(TokenType.TOKEN_PRINT)) {
         printStatement()
+    } else if (match(TokenType.TOKEN_LEFT_BRACE)) {
+        beginScope()
+        block()
+        endScope()
     } else {
         expressionStatement()
     }

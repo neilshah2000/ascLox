@@ -183,6 +183,16 @@ export function run(): InterpretResult {
             case OpCode.OP_POP:
                 pop()
                 break
+            case OpCode.OP_GET_LOCAL: {
+                const slot: u8 = READ_BYTE();
+                push(vm.stack[slot])
+                break
+            }
+            case OpCode.OP_SET_LOCAL: {
+                const slot: u8 = READ_BYTE()
+                vm.stack[slot] = peek(0)
+                break
+            }
             case OpCode.OP_GET_GLOBAL: {
                 const name: ObjString = READ_STRING()
                 const value: Value | null = tableGet(vm.globals, name)
