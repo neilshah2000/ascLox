@@ -13,6 +13,14 @@ const byteInstruction = (name: string, chunk: Chunk, offset: u32): u32 => {
     return offset + 2
 }
 
+const jumpInstruction = (name: string, sign: i32, chunk: Chunk, offset: u32): u32 => {
+    let jump: u16 = <u16>(chunk.code[offset + 1] << 8)
+    jump |= chunk.code[offset + 2]
+    // console.log(`>>>> reading jump = ${jump}`)
+    console.log(`${name} ${offset} -> ${offset + 3 + sign * jump}`)
+    return offset + 3
+}
+
 const constantInstruction = (name: string, chunk: Chunk, offset: u32): u32 => {
     const constant: u8 = chunk.code[offset + 1]
     const valueToString: string = printValueToString(chunk.constants.values[constant])
@@ -23,6 +31,8 @@ const constantInstruction = (name: string, chunk: Chunk, offset: u32): u32 => {
 export const disassembleInstruction = (chunk: Chunk, offset: u32): u32 => {
     // offset of the instruction - number of bytes from the beginning of the chunk
     // line number, or | if the line number is same as previous
+    // console.log(`>>>> capacity = ${chunk.capacity.toString()}`)
+    // console.log(`>>>> offset = ${offset.toString()}`)
     let info = ''
     if (offset > 0 && chunk.lines[offset] == chunk.lines[offset - 1]) {
         info = `${offset}  \t\t\t|  \t\t\t`
@@ -91,6 +101,15 @@ export const disassembleInstruction = (chunk: Chunk, offset: u32): u32 => {
         }
         case OpCode.OP_PRINT: {
             return simpleInstruction(`${info} OP_PRINT`, offset)
+        }
+        case OpCode.OP_JUMP: {
+            return jumpInstruction(`${info} OP_JUMP`, 1, chunk, offset)
+        }
+        case OpCode.OP_JUMP_IF_FALSE: {
+            return jumpInstruction(`${info} OP_JUMP_IF_FALSE`, 1, chunk, offset)
+        }
+        case OpCode.OP_LOOP: {
+            return jumpInstruction(`${info} OP_LOOP`, -1, chunk, offset)
         }
         case OpCode.OP_RETURN: {
             return simpleInstruction(`${info} OP_RETURN`, offset)

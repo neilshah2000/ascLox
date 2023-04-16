@@ -162,9 +162,26 @@ function emitByte(byte: i32): void {
     currentChunk().writeChunk(byte, parser.previous.line)
 }
 
+function emitJump(instruction: u8): i32 {
+    emitByte(instruction)
+    emitByte(0xff)
+    emitByte(0xff)
+    return currentChunk().count - 2
+}
+
 function emitBytes(byte1: i32, byte2: i32): void {
     emitByte(byte1)
     emitByte(byte2)
+}
+
+function emitLoop(loopStart: i32): void {
+    emitByte(OpCode.OP_LOOP)
+
+    const offset = <u16>(currentChunk().count - loopStart + 2)
+    if (offset > u16.MAX_VALUE) error("Loop body too large")
+
+    emitByte((offset >> 8) & 0xff)
+    emitByte(offset & 0xff)
 }
 
 function emitReturn(): void {
@@ -184,6 +201,19 @@ function makeConstant(value: Value): u8 {
 
 function emitConstant(value: Value): void {
     emitBytes(OpCode.OP_CONSTANT, makeConstant(value))
+}
+
+function patchJump(offset: i32): void {
+    // -2 to adjust for the bytecode for the jump offset itself.
+    const jump = currentChunk().count - offset - 2
+    // console.log(`patching jump value = ${jump.toString()}`)
+
+    if (<u16>jump > u16.MAX_VALUE) {
+        error("Too much code to jump over.")
+    }
+
+    currentChunk().code[offset] = (jump >> 8) & 0xff
+    currentChunk().code[offset + 1] = jump & 0xff
 }
 
 function initCompiler(): void {
@@ -282,6 +312,17 @@ function number(canAssign: bool): void {
     emitConstant(NUMBER_VAL(value))
 }
 
+function or_(canAssign: bool): void {
+    const elseJump: i32 = emitJump(<u8>OpCode.OP_JUMP_IF_FALSE)
+    const endJump: i32 = emitJump(<u8>OpCode.OP_JUMP)
+
+    patchJump(elseJump)
+    emitByte(OpCode.OP_POP)
+
+    parsePrecedence(Precedence.PREC_OR)
+    patchJump(endJump)
+}
+
 function mString(canAssign: bool): void {
     // trim leading and trailing quotation marks
     const myString = parser.previous.lexeme.substring(1, parser.previous.lexeme.length - 1)
@@ -356,7 +397,7 @@ rules[TokenType.TOKEN_LESS_EQUAL] = new ParseRule(null, binary, Precedence.PREC_
 rules[TokenType.TOKEN_IDENTIFIER] = new ParseRule(variable, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_STRING] = new ParseRule(mString, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_NUMBER] = new ParseRule(number, null, Precedence.PREC_NONE)
-rules[TokenType.TOKEN_AND] = new ParseRule(null, null, Precedence.PREC_AND)
+rules[TokenType.TOKEN_AND] = new ParseRule(null, and_, Precedence.PREC_AND)
 rules[TokenType.TOKEN_CLASS] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_ELSE] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_FALSE] = new ParseRule(literal, null, Precedence.PREC_NONE)
@@ -364,7 +405,7 @@ rules[TokenType.TOKEN_FOR] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_FUN] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_IF] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_NIL] = new ParseRule(literal, null, Precedence.PREC_NONE)
-rules[TokenType.TOKEN_OR] = new ParseRule(null, null, Precedence.PREC_OR)
+rules[TokenType.TOKEN_OR] = new ParseRule(null, or_, Precedence.PREC_OR)
 rules[TokenType.TOKEN_PRINT] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_RETURN] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_SUPER] = new ParseRule(null, null, Precedence.PREC_NONE)
@@ -486,6 +527,15 @@ function defineVariable(global: u8): void {
     emitBytes(OpCode.OP_DEFINE_GLOBAL, global)
 }
 
+function and_(canAssign: bool): void {
+    const endJump: i32 = emitJump(<u8>OpCode.OP_JUMP_IF_FALSE)
+
+    emitByte(OpCode.OP_POP)
+    parsePrecedence(Precedence.PREC_AND)
+
+    patchJump(endJump)
+}
+
 function getRule(type: TokenType): ParseRule {
     return rules[type]
 }
@@ -521,10 +571,89 @@ function expressionStatement(): void {
     emitByte(OpCode.OP_POP)
 }
 
+function forStatement(): void {
+    beginScope()
+    consume(TokenType.TOKEN_LEFT_PAREN, "Expect '(' after 'for'.")
+    if (match(TokenType.TOKEN_SEMICOLON)) {
+        // No initializer.
+    } else if (match(TokenType.TOKEN_VAR)) {
+        varDeclaration()
+    } else {
+        expressionStatement()
+    }
+
+    let loopStart: i32 = currentChunk().count
+    let exitJump = -1
+    if (!match(TokenType.TOKEN_SEMICOLON)) {
+        expression()
+        consume(TokenType.TOKEN_SEMICOLON, "Expect ';' affter loop condition.")
+
+        // Jump out of loop if condition is false
+        exitJump = emitJump(<u8>OpCode.OP_JUMP_IF_FALSE)
+        emitByte(OpCode.OP_POP) // Condition.
+    }
+
+    if (!match(TokenType.TOKEN_RIGHT_PAREN)) {
+        const bodyJump: i32 = emitJump(<u8>OpCode.OP_JUMP)
+        const incrementStart = currentChunk().count
+        expression()
+        emitByte(OpCode.OP_POP)
+        consume(TokenType.TOKEN_RIGHT_PAREN, "Expect ')' after for clauses.")
+
+        emitLoop(loopStart)
+        loopStart = incrementStart
+        patchJump(bodyJump)
+    }
+
+    statement()
+    emitLoop(loopStart)
+
+    if (exitJump !== -1) {
+        patchJump(exitJump)
+        emitByte(OpCode.OP_POP) // Condition.
+    }
+
+    endScope()
+}
+
+function ifStatement(): void {
+    consume(TokenType.TOKEN_LEFT_PAREN, "Expect '(' after 'if'.")
+    expression()
+    consume(TokenType.TOKEN_RIGHT_PAREN, "Expect ')' after condition.")
+
+    const thenJump: i32 = emitJump(<u8>OpCode.OP_JUMP_IF_FALSE)
+    emitByte(OpCode.OP_POP)
+    statement()
+
+    const elseJump: i32 = emitJump(<u8>OpCode.OP_JUMP)
+
+    patchJump(thenJump)
+    emitByte(OpCode.OP_POP)
+
+    if (match(TokenType.TOKEN_ELSE)) statement()
+    patchJump(elseJump)
+}
+
+
 function printStatement(): void {
     expression()
     consume(TokenType.TOKEN_SEMICOLON, "Expect ';' after value.")
     emitByte(OpCode.OP_PRINT)
+}
+
+function whileStatement(): void {
+    const loopStart: i32 = currentChunk().count
+    consume(TokenType.TOKEN_LEFT_PAREN, "Expect '(' after 'while'.")
+    expression()
+    consume(TokenType.TOKEN_RIGHT_PAREN, "Expect ')' after condition.")
+
+    const exitJump: i32 = emitJump(<u8>OpCode.OP_JUMP_IF_FALSE)
+    emitByte(OpCode.OP_POP)
+    statement()
+    emitLoop(loopStart)
+
+    patchJump(exitJump)
+    emitByte(OpCode.OP_POP)
 }
 
 function synchronize(): void {
@@ -564,6 +693,12 @@ function declaration(): void {
 function statement(): void {
     if (match(TokenType.TOKEN_PRINT)) {
         printStatement()
+    } else if (match(TokenType.TOKEN_FOR)) {
+        forStatement()
+    } else if (match(TokenType.TOKEN_IF)) {
+        ifStatement()
+    } else if (match(TokenType.TOKEN_WHILE)) {
+        whileStatement()
     } else if (match(TokenType.TOKEN_LEFT_BRACE)) {
         beginScope()
         block()

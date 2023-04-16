@@ -22,6 +22,9 @@ export enum OpCode {
     OP_NOT,
     OP_NEGATE,
     OP_PRINT,
+    OP_JUMP,
+    OP_JUMP_IF_FALSE,
+    OP_LOOP,
     OP_RETURN,
 }
 
@@ -45,8 +48,8 @@ export class Chunk {
         if (this.capacity < this.count + 1) {
             const oldCapacity: i32 = this.capacity
             this.capacity = GROW_CAPACITY(oldCapacity)
-            this.code = GROW_UINT8_ARRAY(this.code, oldCapacity, this.capacity)
-            this.lines = GROW_UINT16_ARRAY(this.lines, oldCapacity, this.capacity)
+            this.code = GROW_UINT8_ARRAY(this.code, oldCapacity, this.capacity * 2)
+            this.lines = GROW_UINT16_ARRAY(this.lines, oldCapacity, this.capacity * 2)
         }
 
         // argument is i32 to accept enums, but we only store u8

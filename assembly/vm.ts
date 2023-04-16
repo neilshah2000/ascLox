@@ -122,6 +122,13 @@ export function run(): InterpretResult {
         return constant
     }
 
+    // takes next 2 bytes from the chunk and builds a 16-bit integer from them
+    const READ_SHORT = (): u16 => {
+        vm.ip += 2;
+        const short: u16 = <u16>((vm.chunk.code[vm.ip - 2] << 8) | vm.chunk.code[vm.ip - 1])
+        return short
+    }
+
     const READ_STRING = (): ObjString => {
         return AS_STRING(READ_CONSTANT())
     }
@@ -283,6 +290,21 @@ export function run(): InterpretResult {
                 break
             case OpCode.OP_PRINT: {
                 console.log(printValueToString(pop()))
+                break
+            }
+            case OpCode.OP_JUMP: {
+                const offset: u16 = READ_SHORT()
+                vm.ip += offset
+                break;
+            }
+            case OpCode.OP_JUMP_IF_FALSE: {
+                const offset: u16 = READ_SHORT()
+                if (isFalsey(peek(0))) vm.ip += offset
+                break
+            }
+            case OpCode.OP_LOOP: {
+                const offset: u16 = READ_SHORT()
+                vm.ip -= offset
                 break
             }
             case OpCode.OP_RETURN:

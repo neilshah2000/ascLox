@@ -1,0 +1,12 @@
+var i = 0;
+if (false) {
+    print "if statement false";
+} else {
+    while(i < 10) {
+        print "i = ";
+        print i;
+        i = i + 1;
+    }
+}
+
+print "always printed";

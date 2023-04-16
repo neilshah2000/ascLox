@@ -1,0 +1,5 @@
+if (true) {
+    print "if statement true";
+}
+
+print "always printed";
