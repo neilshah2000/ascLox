@@ -1,14 +1,23 @@
 import { tableFindString, tableSet } from './table'
 import { AS_OBJ, IS_OBJ, NIL_VAL, Value } from './value'
 import { vm } from './vm'
+import { Chunk } from './chunk'
 
 export enum ObjType {
+    OBJ_FUNCTION,
     OBJ_STRING,
 }
 
 export class Obj {
     type: ObjType = ObjType.OBJ_STRING
     next: Obj | null = null // make this an intrusive linked list to keep track of all Objs
+}
+
+export class ObjFunction extends Obj {
+    obj: Obj = new Obj()
+    arity: u8 = 0
+    chunk: Chunk = new Chunk()
+    name: ObjString = new ObjString()
 }
 
 export class ObjString extends Obj {
@@ -22,8 +31,17 @@ export function OBJ_TYPE(value: Value): ObjType {
     return AS_OBJ(value).type
 }
 
+export function IS_FUNCTION(value: Value): bool {
+    return isObjectType(value, ObjType.OBJ_FUNCTION)
+}
+
 export function IS_STRING(value: Value): bool {
     return isObjectType(value, ObjType.OBJ_STRING)
+}
+
+// returns ObjFunction
+export function AS_FUNCTION(value: Value): ObjFunction {
+    return <ObjFunction>AS_OBJ(value)
 }
 
 // returns ObjString
@@ -55,6 +73,13 @@ export function copyString(myString: string): ObjString {
 
     const copy: string = myString.slice(0)
     return allocateString(copy)
+}
+
+function printFunction(myFunction: ObjFunction): string {
+    if (myFunction.name.chars == '') { // clox tests for function.name == null, we test for name.chars is empty string
+        return '<script>'
+    }
+    return `<fn ${myFunction.name.chars}`
 }
 
 // takes ownership of the original string
@@ -106,6 +131,11 @@ export function traversePrintObjects(start: Obj | null): void {
     while (next !== null) {
         const type = next.type
         switch (type) {
+            case ObjType.OBJ_FUNCTION:
+                const myFunctionObj = <ObjFunction>next
+                const fnStr = printFunction(myFunctionObj)
+                console.log(fnStr)
+                break
             case ObjType.OBJ_STRING:
                 const myStringObj = <ObjString>next
                 console.log(`string: ${myStringObj.chars}`)

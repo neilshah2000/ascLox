@@ -1,10 +1,33 @@
+const FRAMES_MAX = 64
 const STACK_MAX = 256
 
+export class CallFrame {
+    function: ObjFunction = new ObjFunction()
+    ip: u8 = 0 // not a pointer like cLox
+
+    // points into the VMs value stack. We are going to treat this as an array
+    // but which index??
+    // slots: Value = new Value
+
+    // Instead of a c pointer (slots) which points into the correct start index of the VMs value stack, (relative)
+    // we are just going to store the (absolute) start index
+    // VM is global anyway so we can always access vm.stack
+    // for start of the callframes slot window we do vm.stack[frame.slotsIndex]
+    // and to offset from there, we do vm.stack[frame.slotsIndex + offset]
+    slotsIndex: i32 = 0
+}
+
 export class VM {
-    chunk: Chunk = new Chunk()
-    //// different from clox. we dont have pointers so we just store and use the index
-    //// instead of dereference the pointer (*ip), we use the ip array index (this.chunk.code[ip])
-    ip: u16 = 0 // location of instruction currently being executed
+
+    frames: StaticArray<CallFrame> = new StaticArray<CallFrame>(FRAMES_MAX).fill(new CallFrame())
+    frameCount: i32 = 0
+
+    // chunk: Chunk = new Chunk()
+    // //// different from clox. we dont have pointers so we just store and use the index
+    // //// instead of dereference the pointer (*ip), we use the ip array index (this.chunk.code[ip])
+    // ip: u16 = 0 // location of instruction currently being executed
+
+
     stack: StaticArray<Value> = new StaticArray<Value>(STACK_MAX).fill(new Value())
     stackTop: i32 = 0 // points to the next empty slot in the stack
     globals: Table = new Map<ObjString, Value>()
@@ -35,7 +58,7 @@ import {
     ValueType,
 } from './value'
 import { compile, printTokens } from './compiler'
-import { AS_STRING, IS_STRING, Obj, ObjString, takeString } from './object'
+import { AS_STRING, IS_STRING, Obj, ObjFunction, ObjString, takeString } from './object'
 import { freeObjects } from './memory'
 import { freeTable, initTable, Table, tableDelete, tableGet, tableSet } from './table'
 
@@ -54,15 +77,23 @@ function printObjects(): void {
 
 function resetStack(): void {
     vm.stackTop = 0
+
+    // TODO: keep??
     vm.objects = null
+    vm.frameCount = 0
 }
 
 function runtimeError(format: string): void {
     let errorStr = ''
     errorStr = errorStr + format
 
-    const instruction: u16 = vm.ip - 1
-    const line: u16 = vm.chunk.lines[instruction]
+    // const instruction: u16 = vm.ip - 1
+    // const line: u16 = vm.chunk.lines[instruction]
+
+    const frame: CallFrame = vm.frames[vm.frameCount - 1]
+    const instruction: u16 = frame.ip - 1
+    const line: u16 = frame.function.chunk.lines[instruction]
+
     errorStr = errorStr + `[line ${line}] in script`
     console.log(errorStr)
     resetStack()
@@ -112,20 +143,22 @@ function concatenate(): void {
 }
 
 export function run(): InterpretResult {
+    const frame: CallFrame = vm.frames[vm.frameCount - 1] // no closures!!!
+
     const READ_BYTE = (): u8 => {
-        return vm.chunk.code[vm.ip++]
+        return frame.ip++ //??? 
     }
 
     const READ_CONSTANT = (): Value => {
-        const constant = vm.chunk.constants.values[READ_BYTE()]
+        const constant = frame.function.chunk.constants.values[READ_BYTE()]
         // console.log(`read constant ${constant}`)
         return constant
     }
 
     // takes next 2 bytes from the chunk and builds a 16-bit integer from them
     const READ_SHORT = (): u16 => {
-        vm.ip += 2;
-        const short: u16 = <u16>((vm.chunk.code[vm.ip - 2] << 8) | vm.chunk.code[vm.ip - 1])
+        frame.ip += 2;
+        const short: u16 = <u16>((frame.function.chunk.code[frame.ip - 2] << 8) | frame.function.chunk.code[frame.ip - 1])
         return short
     }
 
@@ -168,7 +201,11 @@ export function run(): InterpretResult {
             stackPrint = stackPrint + `[${valStr}]`
         }
         console.log(stackPrint)
-        disassembleInstruction(vm.chunk, vm.ip)
+        // disassembleInstruction(vm.chunk, vm.ip)
+        // unlike clox, we are using indexes for ip not pointers, so we dont need to 
+        // minus start pointer (frame->function->chunk->code) to get the offset
+        // we already have the ip as a relative offset from beginning of bytecode
+        disassembleInstruction(frame.function.chunk, frame.ip)
         // END DEBUG_TRACE_EXECUTION
 
         let instruction: u8 = READ_BYTE()
@@ -192,12 +229,15 @@ export function run(): InterpretResult {
                 break
             case OpCode.OP_GET_LOCAL: {
                 const slot: u8 = READ_BYTE();
-                push(vm.stack[slot])
+                // push(frame.slots[slot])
+                push(vm.stack[frame.slotsIndex + slot])
                 break
             }
             case OpCode.OP_SET_LOCAL: {
                 const slot: u8 = READ_BYTE()
-                vm.stack[slot] = peek(0)
+                // vm.stack[slot] = peek(0)
+                // frame.slots[slot] = peek(0)
+                vm.stack[frame.slotsIndex + slot] = peek(0)
                 break
             }
             case OpCode.OP_GET_GLOBAL: {
@@ -294,17 +334,20 @@ export function run(): InterpretResult {
             }
             case OpCode.OP_JUMP: {
                 const offset: u16 = READ_SHORT()
-                vm.ip += offset
+                // vm.ip += offset
+                frame.ip += offset
                 break;
             }
             case OpCode.OP_JUMP_IF_FALSE: {
                 const offset: u16 = READ_SHORT()
-                if (isFalsey(peek(0))) vm.ip += offset
+                // if (isFalsey(peek(0))) vm.ip += offset
+                if (isFalsey(peek(0))) frame.ip += offset
                 break
             }
             case OpCode.OP_LOOP: {
                 const offset: u16 = READ_SHORT()
-                vm.ip -= offset
+                // vm.ip -= offset
+                frame.ip -= offset
                 break
             }
             case OpCode.OP_RETURN:
@@ -319,20 +362,33 @@ export function run(): InterpretResult {
 export function interpret(source: string): InterpretResult {
     printTokens(source) // testing the scanner
 
-    const chunk: Chunk = new Chunk()
+    /////////////
+    // const chunk: Chunk = new Chunk()
 
-    if (!compile(source, chunk)) {
-        // free chunk
-        return InterpretResult.INTERPRET_COMPILE_ERROR
-    }
+    // if (!compile(source, chunk)) {
+    //     // free chunk
+    //     return InterpretResult.INTERPRET_COMPILE_ERROR
+    // }
 
-    vm.chunk = chunk
-    vm.ip = 0
+    // vm.chunk = chunk
+    // vm.ip = 0
+    //////////////
 
-    const result: InterpretResult = run()
+    const myfunction: ObjFunction | null = compile(source)
+    if (myfunction === null) return InterpretResult.INTERPRET_COMPILE_ERROR
 
-    printObjects()
+    push(OBJ_VAL(myfunction))
+    // vm. frames array is already filled with new initialized CallFrame objects
 
-    // free chunk
-    return result
+    // increment frameCount before giving out the first frame to the program,
+    // so the compiler can implicityly claim the first stack slot for the VMs own internal use
+    const frame: CallFrame = vm.frames[vm.frameCount++]
+    frame.function = myfunction
+    // frame.ip already initliaized
+    // frame.slotIndex already initialized 0
+
+    return run()
+
+    // TODO: no more object printing
+    // printObjects()
 }

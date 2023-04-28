@@ -2,7 +2,7 @@ import { Token, TokenType, initScanner, scanToken, tokenTypeStrings } from './sc
 import { Chunk, OpCode } from './chunk'
 import { NUMBER_VAL, OBJ_VAL, Value } from './value'
 import { disassembleChunk } from './debug'
-import { copyString } from './object'
+import { copyString, ObjFunction } from './object'
 
 class Parser {
     current: Token = new Token()
@@ -44,8 +44,16 @@ class Local {
     depth: i32 = 0 // numbered nesting level, 0 is global, 1 first top-level ..etc
 }
 
+enum FunctionType {
+    TYPE_FUNCTION,
+    TYPE_SCRIPT
+}
+
 const U8_COUNT = 256
 class Compiler {
+    function: ObjFunction = new ObjFunction()
+    type: FunctionType = FunctionType.TYPE_SCRIPT
+
     locals: Local[] = new Array<Local>(U8_COUNT)
     localCount: i32 = 0
     scopeDepth: i32 = 0
@@ -54,10 +62,9 @@ class Compiler {
 // global variable. TODO: use @global decorator??
 let parser: Parser = new Parser()
 let current: Compiler = new Compiler()
-let compilingChunk: Chunk = new Chunk()
 
 function currentChunk(): Chunk {
-    return compilingChunk
+    return current.function.chunk
 }
 
 function errorAt(token: Token, message: string): void {
@@ -109,10 +116,11 @@ export function printTokens(source: string): void {
     console.log(lineStr)
 }
 
-export function compile(source: string, chunk: Chunk): bool {
+export function compile(source: string): ObjFunction | null {
     initScanner(source)
-    initCompiler()
-    compilingChunk = chunk
+    const compiler: Compiler = new Compiler() // compiler is stored on the stack in this compile() function
+    initCompiler(compiler, FunctionType.TYPE_SCRIPT)
+
 
     parser.hadError = false
     parser.panicMode = false
@@ -123,8 +131,8 @@ export function compile(source: string, chunk: Chunk): bool {
         declaration()
     }
 
-    endCompiler()
-    return !parser.hadError
+    const myFunction: ObjFunction = endCompiler()
+    return parser.hadError ? null : myFunction
 }
 
 function advance(): void {
@@ -216,17 +224,34 @@ function patchJump(offset: i32): void {
     currentChunk().code[offset + 1] = jump & 0xff
 }
 
-function initCompiler(): void {
-    current = new Compiler()
+// TODO: can't pass a pointer and initialize it here
+function initCompiler(compiler: Compiler, type: FunctionType): void {
+    // compiler.function = null
+    compiler.type = type
+    compiler.localCount = 0
+    compiler.scopeDepth = 0
+    compiler.function = new ObjFunction()
+    current = compiler
+
+    const local: Local = current.locals[current.localCount++]
+    // stack slot 0 for the VM'c own internal use. function name will be '' here
+    local.depth = 0
+    local.name.lexeme = ''
+
     console.log('init compiler')
 }
 
-function endCompiler(): void {
+function endCompiler(): ObjFunction {
     emitReturn()
+    const myFunction: ObjFunction = current.function
+
     // TODO: put behind debug flag
     if (!parser.hadError) {
-        disassembleChunk(currentChunk(), 'bytecode')
+        // test function name for '' to check if top level code
+        disassembleChunk(currentChunk(), myFunction.name.chars !== '' ?  myFunction.name.chars : '<script>')
     }
+
+    return myFunction
 }
 
 function beginScope(): void {
