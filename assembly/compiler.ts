@@ -51,6 +51,7 @@ enum FunctionType {
 
 const U8_COUNT = 256
 class Compiler {
+    enclosing: Compiler | null = null
     function: ObjFunction = new ObjFunction()
     type: FunctionType = FunctionType.TYPE_SCRIPT
 
@@ -97,8 +98,7 @@ function errorAtCurrent(message: string): void {
 // testing the scanner
 export function printTokens(source: string): void {
     console.log()
-    console.log('test===')
-    console.log(`== compiled tokens ==bb`)
+    console.log(`== compiled tokens ==`)
     initScanner(source)
     let line = -1
     let lineStr = ''
@@ -228,6 +228,7 @@ function patchJump(offset: i32): void {
 
 // TODO: can't pass a pointer and initialize it here
 function initCompiler(compiler: Compiler, type: FunctionType): void {
+    compiler.enclosing = current
     // compiler.function = null
     compiler.type = type
     compiler.localCount = 0
@@ -235,6 +236,9 @@ function initCompiler(compiler: Compiler, type: FunctionType): void {
     compiler.function = new ObjFunction()
     console.log('== setting up compiler ==')
     current = compiler
+    if (type !== FunctionType.TYPE_SCRIPT) {
+        current.function.name = copyString(parser.previous.lexeme) // different to cLox
+    }
 
     const local: Local = current.locals[current.localCount++]
     // stack slot 0 for the VM'c own internal use. function name will be '' here
@@ -254,6 +258,13 @@ function endCompiler(): ObjFunction {
         disassembleChunk(currentChunk(), myFunction.name.chars !== '' ?  myFunction.name.chars : '<script>')
     }
 
+    if (current.enclosing !== null) {
+        console.log('end enclosing compiler')
+        current = <Compiler>current.enclosing
+    }
+    else {
+        console.log('== end of compiler ==') // only to level compiler will have enclosing as null
+    }
     return myFunction
 }
 
@@ -543,6 +554,7 @@ function parseVariable(errorMessage: string): u8 {
 }
 
 function markInitialized(): void {
+    if (current.scopeDepth === 0) return
     current.locals[current.localCount - 1].depth = current.scopeDepth
 }
 
@@ -578,6 +590,40 @@ function block(): void {
     }
 
     consume(TokenType.TOKEN_RIGHT_BRACE, "Expect '}' after block.")
+}
+
+function funCompile(type: FunctionType): void {
+    const compiler: Compiler = new Compiler()
+    initCompiler(compiler, type)
+    beginScope()
+
+    consume(TokenType.TOKEN_LEFT_PAREN, "Expect '(' after function name.")
+    if (!check(TokenType.TOKEN_RIGHT_PAREN)) {
+        do {
+            current.function.arity++
+            if (current.function.arity > 255) {
+                errorAtCurrent("Can't have more than 255 parameters.")
+            }
+
+            const paramConstant: u8 = parseVariable("Expect parameter name.")
+            defineVariable(paramConstant)
+        } while (match(TokenType.TOKEN_COMMA))
+    }
+    consume(TokenType.TOKEN_RIGHT_PAREN, "Expect ')' after parameters.")
+
+    consume(TokenType.TOKEN_LEFT_BRACE, "Expect '{' before function body.")
+    block()
+
+    const myFunction: ObjFunction = endCompiler()
+    emitBytes(OpCode.OP_CONSTANT, makeConstant(OBJ_VAL(myFunction)))
+
+}
+
+function funDeclaration(): void {
+    const global: u8 = parseVariable("Expect function name.")
+    markInitialized()
+    funCompile(FunctionType.TYPE_FUNCTION)
+    defineVariable(global)
 }
 
 function varDeclaration(): void {
@@ -709,7 +755,10 @@ function synchronize(): void {
 }
 
 function declaration(): void {
-    if (match(TokenType.TOKEN_VAR)) {
+    if (match(TokenType.TOKEN_FUN)) {
+        funDeclaration()
+    }
+    else if (match(TokenType.TOKEN_VAR)) {
         varDeclaration()
     } else {
         statement()
