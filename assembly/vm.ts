@@ -103,6 +103,8 @@ function runtimeError(format: string): void {
 }
 
 export function initVM(): void {
+    vm = new VM()
+
     resetStack()
 
     vm.globals = initTable()
@@ -120,11 +122,13 @@ export function push(value: Value): void {
     vm.stack[vm.stackTop] = value // TODO: no assignment here
     // vm.stack.push(value)
     vm.stackTop++
+    // console.log(`push so stack top index: ${vm.stackTop}`)
     // console.log(`stack top value: ${printValueToString(vm.stack[vm.stackTop - 1])}`)
 }
 
 export function pop(): Value {
     vm.stackTop--
+    // console.log(`pop so stack top index: ${vm.stackTop}`)
     return vm.stack[vm.stackTop]
 }
 
@@ -146,9 +150,18 @@ function concatenate(): void {
 }
 
 export function run(): InterpretResult {
+    /////////
+    // for (let i = 0; i < vm.frameCount; i++) {
+    //     const frame: CallFrame = vm.frames[i]
+    //     console.log(`frame ${i}: fn name:${frame.function.name.chars} ip: ${frame.ip}`)
+    // }
+    /////////
+
+
     const frame: CallFrame = vm.frames[vm.frameCount - 1] // no closures!!!
 
     const READ_BYTE = (myFrame: CallFrame): u8 => {
+        // console.log(`reading byte from frame at ip ${myFrame.ip}`)
         return myFrame.function.chunk.code[myFrame.ip++]
     }
 

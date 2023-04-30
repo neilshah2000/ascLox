@@ -54,6 +54,7 @@ class Compiler {
     function: ObjFunction = new ObjFunction()
     type: FunctionType = FunctionType.TYPE_SCRIPT
 
+    // keeps track of which stack slots are associated with which local variables or temporaries
     locals: Local[] = new Array<Local>(U8_COUNT).fill(new Local())
     localCount: i32 = 0
     scopeDepth: i32 = 0
@@ -270,11 +271,10 @@ function endScope(): void {
 }
 
 function binary(canAssign: bool): void {
-    console.log('binary')
     const operatorType: TokenType = parser.previous.type
     const rule: ParseRule = getRule(operatorType)
     parsePrecedence(<Precedence>(rule.precedence + 1))
-    console.log('token type ' + operatorType.toString())
+    // console.log('token type ' + operatorType.toString())
     switch (operatorType) {
         case TokenType.TOKEN_BANG_EQUAL:
             emitBytes(OpCode.OP_EQUAL, OpCode.OP_NOT)
