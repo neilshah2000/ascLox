@@ -166,7 +166,9 @@ export function run(): InterpretResult {
     }
 
     const READ_CONSTANT = (myFrame: CallFrame): Value => {
-        const constant = myFrame.function.chunk.constants.values[READ_BYTE(myFrame)]
+        const valueIndex = READ_BYTE(myFrame)
+        // console.log(`read constant index ${valueIndex} from frame ${vm.frameCount - 1}`)
+        const constant = myFrame.function.chunk.constants.values[valueIndex]
         // console.log(`read constant ${constant}`)
         return constant
     }

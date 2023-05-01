@@ -1,4 +1,4 @@
-import { AS_AS_STRING, AS_STRING, Obj, ObjString, ObjType, OBJ_TYPE } from './object'
+import { AS_AS_STRING, AS_STRING, Obj, ObjString, ObjType, OBJ_TYPE, AS_FUNCTION, printFunction } from './object'
 
 export enum ValueType {
     VAL_BOOL,
@@ -80,6 +80,8 @@ function objectToString(objectValue: Value): string {
     switch (OBJ_TYPE(objectValue)) {
         case ObjType.OBJ_STRING:
             return AS_AS_STRING(objectValue)
+        case ObjType.OBJ_FUNCTION:
+            return printFunction(AS_FUNCTION(objectValue))
         default:
             return '' // should be unreachable
     }

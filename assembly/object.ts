@@ -79,11 +79,11 @@ export function copyString(myString: string): ObjString {
     return allocateString(copy)
 }
 
-function printFunction(myFunction: ObjFunction): string {
+export function printFunction(myFunction: ObjFunction): string {
     if (myFunction.name.chars == '') { // clox tests for function.name == null, we test for name.chars is empty string
         return '<script>'
     }
-    return `<fn ${myFunction.name.chars}`
+    return `<fn ${myFunction.name.chars}>`
 }
 
 // takes ownership of the original string

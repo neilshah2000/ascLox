@@ -121,7 +121,7 @@ export function printTokens(source: string): void {
 export function compile(source: string): ObjFunction | null {
     initScanner(source)
     const compiler: Compiler = new Compiler() // compiler is stored on the stack in this compile() function
-    initCompiler(compiler, FunctionType.TYPE_SCRIPT)
+    initCompiler(compiler, FunctionType.TYPE_SCRIPT) // top level compiler
 
 
     parser.hadError = false
@@ -228,24 +228,33 @@ function patchJump(offset: i32): void {
 
 // TODO: can't pass a pointer and initialize it here
 function initCompiler(compiler: Compiler, type: FunctionType): void {
-    compiler.enclosing = current
+    // for top level code, the enclosing compiler is null
+    if (type === FunctionType.TYPE_SCRIPT) {
+        console.log('== setting up TOP LEVEL compiler ==')
+        compiler.enclosing = null
+    } else {
+        compiler.enclosing = current
+    }
+    //////////////
+
     // compiler.function = null
     compiler.type = type
     compiler.localCount = 0
     compiler.scopeDepth = 0
     compiler.function = new ObjFunction()
-    console.log('== setting up compiler ==')
+    
+    // store in 'current' global variable
     current = compiler
+
     if (type !== FunctionType.TYPE_SCRIPT) {
         current.function.name = copyString(parser.previous.lexeme) // different to cLox
+        console.log(`== setting up fn ${current.function.name.chars} compiler ==`)
     }
 
     const local: Local = current.locals[current.localCount++]
     // stack slot 0 for the VM'c own internal use. function name will be '' here
     local.depth = 0
     local.name.lexeme = ''
-
-    console.log('init compiler')
 }
 
 function endCompiler(): ObjFunction {
@@ -258,12 +267,13 @@ function endCompiler(): ObjFunction {
         disassembleChunk(currentChunk(), myFunction.name.chars !== '' ?  myFunction.name.chars : '<script>')
     }
 
+    // maybe we could have used function type == script to check if top level code, instead of messing about with null
     if (current.enclosing !== null) {
-        console.log('end enclosing compiler')
+        console.log(`== end enclosing compiler for fn ${current.function.name.chars} ==`)
         current = <Compiler>current.enclosing
     }
     else {
-        console.log('== end of compiler ==') // only to level compiler will have enclosing as null
+        console.log('== end of TOP LEVEL compiler ==') // only to level compiler will have enclosing as null
     }
     return myFunction
 }
@@ -594,7 +604,7 @@ function block(): void {
 
 function funCompile(type: FunctionType): void {
     const compiler: Compiler = new Compiler()
-    initCompiler(compiler, type)
+    initCompiler(compiler, type) // not top level
     beginScope()
 
     consume(TokenType.TOKEN_LEFT_PAREN, "Expect '(' after function name.")
