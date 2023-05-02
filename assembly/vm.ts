@@ -52,6 +52,7 @@ import {
     IS_BOOL,
     IS_NIL,
     IS_NUMBER,
+    IS_OBJ,
     NIL_VAL,
     NUMBER_VAL,
     OBJ_VAL,
@@ -61,7 +62,7 @@ import {
     ValueType,
 } from './value'
 import { compile, printTokens } from './compiler'
-import { AS_STRING, IS_STRING, Obj, ObjFunction, ObjString, takeString } from './object'
+import { AS_STRING, IS_STRING, OBJ_TYPE, Obj, ObjFunction, ObjString, takeString, ObjType, AS_FUNCTION } from './object'
 import { freeObjects } from './memory'
 import { freeTable, initTable, Table, tableDelete, tableGet, tableSet } from './table'
 
@@ -136,6 +137,33 @@ function peek(distance: i32): Value {
     return vm.stack[vm.stackTop - 1 - distance]
 }
 
+function call(myFunction: ObjFunction, argCount: u8): bool {
+    const frame: CallFrame = vm.frames[vm.frameCount++]
+    frame.function = myFunction
+    // This simply initializes the next CallFrame on the stack.
+    // It stores a pointer to the function being called
+    // and points the frame’s ip to the beginning of the function’s bytecode.
+    // Finally, it sets up the slots pointer to give the frame its window into the stack.
+    // The arithmetic there ensures that the arguments already on the stack
+    // line up with the function’s parameters:
+    frame.ip = 0 // not myFunction.chunk.code;
+    frame.slotsIndex = vm.stackTop - argCount - 1;
+    return true;
+  }
+
+function callValue(callee: Value, argCount: u8): bool {
+    if (IS_OBJ(callee)) {
+        switch (OBJ_TYPE(callee)) {
+            case ObjType.OBJ_FUNCTION: 
+                return call(AS_FUNCTION(callee), argCount);
+            default:
+                break; // Non-callable object type.
+        }
+    }
+    runtimeError("Can only call functions and classes.");
+    return false;
+  }
+
 function isFalsey(value: Value): bool {
     return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value))
 }
@@ -158,7 +186,7 @@ export function run(): InterpretResult {
     /////////
 
 
-    const frame: CallFrame = vm.frames[vm.frameCount - 1] // no closures!!!
+    let frame: CallFrame = vm.frames[vm.frameCount - 1] // no closures!!!
 
     const READ_BYTE = (myFrame: CallFrame): u8 => {
         // console.log(`reading byte from frame at ip ${myFrame.ip}`)
@@ -368,6 +396,15 @@ export function run(): InterpretResult {
                 frame.ip -= offset
                 break
             }
+            case OpCode.OP_CALL: {
+                const argCount: u8 = READ_BYTE(frame)
+                if (!callValue(peek(argCount), argCount)) {
+                  return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                }
+                // if call was successful, it will have created a new frame for us
+                frame = vm.frames[vm.frameCount - 1]
+                break;
+            }
             case OpCode.OP_RETURN:
                 // console.log(`return ${printValueToString(pop())}`)
                 // exit interpreter
@@ -396,14 +433,16 @@ export function interpret(source: string): InterpretResult {
     if (myfunction === null) return InterpretResult.INTERPRET_COMPILE_ERROR
 
     push(OBJ_VAL(myfunction)) // should be a value with function type
-    // vm. frames array is already filled with new initialized CallFrame objects
 
-    // increment frameCount before giving out the first frame to the program,
-    // so the compiler can implicityly claim the first stack slot for the VMs own internal use
-    const frame: CallFrame = vm.frames[vm.frameCount++]
-    frame.function = myfunction
-    // frame.ip already initliaized
-    // frame.slotIndex already initialized 0
+    // // vm. frames array is already filled with new initialized CallFrame objects
+    // // increment frameCount before giving out the first frame to the program,
+    // // so the compiler can implicityly claim the first stack slot for the VMs own internal use
+    // const frame: CallFrame = vm.frames[vm.frameCount++]
+    // frame.function = myfunction
+    // // frame.ip already initliaized
+    // // frame.slotIndex already initialized 0
+
+    call(myfunction, 0);
 
     return run()
 

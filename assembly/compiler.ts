@@ -332,6 +332,12 @@ function binary(canAssign: bool): void {
     }
 }
 
+function call(canAssign: bool): void {
+    const argCount: u8 = argumentList();
+    emitBytes(OpCode.OP_CALL, argCount);
+}
+  
+
 function literal(canAssign: bool): void {
     switch (parser.previous.type) {
         case TokenType.TOKEN_FALSE: {
@@ -424,7 +430,7 @@ function unary(canAssign: bool): void {
 }
 
 const rules: ParseRule[] = []
-rules[TokenType.TOKEN_LEFT_PAREN] = new ParseRule(grouping, null, Precedence.PREC_CALL)
+rules[TokenType.TOKEN_LEFT_PAREN] = new ParseRule(grouping, call, Precedence.PREC_CALL)
 rules[TokenType.TOKEN_RIGHT_PAREN] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_LEFT_BRACE] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_RIGHT_BRACE] = new ParseRule(null, null, Precedence.PREC_NONE)
@@ -576,6 +582,21 @@ function defineVariable(global: u8): void {
 
     emitBytes(OpCode.OP_DEFINE_GLOBAL, global)
 }
+
+function argumentList(): u8 {
+    let argCount: u8 = 0;
+    if (!check(TokenType.TOKEN_RIGHT_PAREN)) {
+      do {
+        expression();
+        if (argCount === 255) {
+            error("Can't have more than 255 arguments.");
+        }
+        argCount++;
+      } while (match(TokenType.TOKEN_COMMA));
+    }
+    consume(TokenType.TOKEN_RIGHT_PAREN, "Expect ')' after arguments.");
+    return argCount;
+  }
 
 function and_(canAssign: bool): void {
     const endJump: i32 = emitJump(<u8>OpCode.OP_JUMP_IF_FALSE)

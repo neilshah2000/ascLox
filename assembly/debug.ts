@@ -111,6 +111,9 @@ export const disassembleInstruction = (chunk: Chunk, offset: u32): u32 => {
         case OpCode.OP_LOOP: {
             return jumpInstruction(`${info} OP_LOOP`, -1, chunk, offset)
         }
+        case OpCode.OP_CALL: {
+            return byteInstruction(`${info} OP_CALL`, chunk, offset)
+        }
         case OpCode.OP_RETURN: {
             return simpleInstruction(`${info} OP_RETURN`, offset)
         }
