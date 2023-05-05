@@ -14,10 +14,14 @@ export class Obj {
 }
 
 export class ObjFunction extends Obj {
-    obj: Obj = new Obj()
     arity: u8 = 0
     chunk: Chunk = new Chunk()
     name: ObjString = new ObjString()
+
+    constructor () {
+        super()
+        this.type = ObjType.OBJ_FUNCTION
+    }
 }
 
 export class ObjString extends Obj {
@@ -75,11 +79,11 @@ export function copyString(myString: string): ObjString {
     return allocateString(copy)
 }
 
-function printFunction(myFunction: ObjFunction): string {
+export function printFunction(myFunction: ObjFunction): string {
     if (myFunction.name.chars == '') { // clox tests for function.name == null, we test for name.chars is empty string
         return '<script>'
     }
-    return `<fn ${myFunction.name.chars}`
+    return `<fn ${myFunction.name.chars}>`
 }
 
 // takes ownership of the original string

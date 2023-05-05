@@ -3,7 +3,9 @@ const STACK_MAX = 256
 
 export class CallFrame {
     function: ObjFunction = new ObjFunction()
-    ip: u8 = 0 // not a pointer like cLox
+    ip: u32 = 0 // not a pointer like cLox
+    // How can we only have u8 for ip, when jumps are sometimes 2 bytes??
+    // ANS: We get the u8 type when we dereference the pointer to the code array. ip can be any size
 
     // points into the VMs value stack. We are going to treat this as an array
     // but which index??
@@ -14,6 +16,7 @@ export class CallFrame {
     // VM is global anyway so we can always access vm.stack
     // for start of the callframes slot window we do vm.stack[frame.slotsIndex]
     // and to offset from there, we do vm.stack[frame.slotsIndex + offset]
+    // TODO: create functioons for these
     slotsIndex: i32 = 0
 }
 
@@ -49,6 +52,7 @@ import {
     IS_BOOL,
     IS_NIL,
     IS_NUMBER,
+    IS_OBJ,
     NIL_VAL,
     NUMBER_VAL,
     OBJ_VAL,
@@ -58,7 +62,7 @@ import {
     ValueType,
 } from './value'
 import { compile, printTokens } from './compiler'
-import { AS_STRING, IS_STRING, Obj, ObjFunction, ObjString, takeString } from './object'
+import { AS_STRING, IS_STRING, OBJ_TYPE, Obj, ObjFunction, ObjString, takeString, ObjType, AS_FUNCTION } from './object'
 import { freeObjects } from './memory'
 import { freeTable, initTable, Table, tableDelete, tableGet, tableSet } from './table'
 
@@ -91,7 +95,7 @@ function runtimeError(format: string): void {
     // const line: u16 = vm.chunk.lines[instruction]
 
     const frame: CallFrame = vm.frames[vm.frameCount - 1]
-    const instruction: u16 = frame.ip - 1
+    const instruction: u32 = frame.ip - 1
     const line: u16 = frame.function.chunk.lines[instruction]
 
     errorStr = errorStr + `[line ${line}] in script`
@@ -100,6 +104,8 @@ function runtimeError(format: string): void {
 }
 
 export function initVM(): void {
+    vm = new VM()
+
     resetStack()
 
     vm.globals = initTable()
@@ -117,17 +123,46 @@ export function push(value: Value): void {
     vm.stack[vm.stackTop] = value // TODO: no assignment here
     // vm.stack.push(value)
     vm.stackTop++
+    // console.log(`push so stack top index: ${vm.stackTop}`)
     // console.log(`stack top value: ${printValueToString(vm.stack[vm.stackTop - 1])}`)
 }
 
 export function pop(): Value {
     vm.stackTop--
+    // console.log(`pop so stack top index: ${vm.stackTop}`)
     return vm.stack[vm.stackTop]
 }
 
 function peek(distance: i32): Value {
     return vm.stack[vm.stackTop - 1 - distance]
 }
+
+function call(myFunction: ObjFunction, argCount: u8): bool {
+    const frame: CallFrame = vm.frames[vm.frameCount++]
+    frame.function = myFunction
+    // This simply initializes the next CallFrame on the stack.
+    // It stores a pointer to the function being called
+    // and points the frame’s ip to the beginning of the function’s bytecode.
+    // Finally, it sets up the slots pointer to give the frame its window into the stack.
+    // The arithmetic there ensures that the arguments already on the stack
+    // line up with the function’s parameters:
+    frame.ip = 0 // not myFunction.chunk.code;
+    frame.slotsIndex = vm.stackTop - argCount - 1;
+    return true;
+  }
+
+function callValue(callee: Value, argCount: u8): bool {
+    if (IS_OBJ(callee)) {
+        switch (OBJ_TYPE(callee)) {
+            case ObjType.OBJ_FUNCTION: 
+                return call(AS_FUNCTION(callee), argCount);
+            default:
+                break; // Non-callable object type.
+        }
+    }
+    runtimeError("Can only call functions and classes.");
+    return false;
+  }
 
 function isFalsey(value: Value): bool {
     return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value))
@@ -143,27 +178,38 @@ function concatenate(): void {
 }
 
 export function run(): InterpretResult {
-    const frame: CallFrame = vm.frames[vm.frameCount - 1] // no closures!!!
+    /////////
+    // for (let i = 0; i < vm.frameCount; i++) {
+    //     const frame: CallFrame = vm.frames[i]
+    //     console.log(`frame ${i}: fn name:${frame.function.name.chars} ip: ${frame.ip}`)
+    // }
+    /////////
 
-    const READ_BYTE = (): u8 => {
-        return frame.ip++ //??? 
+
+    let frame: CallFrame = vm.frames[vm.frameCount - 1] // no closures!!!
+
+    const READ_BYTE = (myFrame: CallFrame): u8 => {
+        // console.log(`reading byte from frame at ip ${myFrame.ip}`)
+        return myFrame.function.chunk.code[myFrame.ip++]
     }
 
-    const READ_CONSTANT = (): Value => {
-        const constant = frame.function.chunk.constants.values[READ_BYTE()]
+    const READ_CONSTANT = (myFrame: CallFrame): Value => {
+        const valueIndex = READ_BYTE(myFrame)
+        // console.log(`read constant index ${valueIndex} from frame ${vm.frameCount - 1}`)
+        const constant = myFrame.function.chunk.constants.values[valueIndex]
         // console.log(`read constant ${constant}`)
         return constant
     }
 
     // takes next 2 bytes from the chunk and builds a 16-bit integer from them
-    const READ_SHORT = (): u16 => {
-        frame.ip += 2;
-        const short: u16 = <u16>((frame.function.chunk.code[frame.ip - 2] << 8) | frame.function.chunk.code[frame.ip - 1])
+    const READ_SHORT = (myFrame: CallFrame): u16 => {
+        myFrame.ip += 2;
+        const short: u16 = <u16>((myFrame.function.chunk.code[myFrame.ip - 2] << 8) | myFrame.function.chunk.code[myFrame.ip - 1])
         return short
     }
 
-    const READ_STRING = (): ObjString => {
-        return AS_STRING(READ_CONSTANT())
+    const READ_STRING = (myFrame: CallFrame): ObjString => {
+        return AS_STRING(READ_CONSTANT(myFrame))
     }
 
     const BINARY_BOOL_OP = (operatorFn: (a: f64, b: f64) => bool): InterpretResult => {
@@ -208,10 +254,10 @@ export function run(): InterpretResult {
         disassembleInstruction(frame.function.chunk, frame.ip)
         // END DEBUG_TRACE_EXECUTION
 
-        let instruction: u8 = READ_BYTE()
+        let instruction: u8 = READ_BYTE(frame)
         switch (instruction) {
             case OpCode.OP_CONSTANT:
-                const constant: Value = READ_CONSTANT()
+                const constant: Value = READ_CONSTANT(frame)
                 push(constant)
                 // push(constant)
                 break
@@ -228,20 +274,20 @@ export function run(): InterpretResult {
                 pop()
                 break
             case OpCode.OP_GET_LOCAL: {
-                const slot: u8 = READ_BYTE();
+                const slot: u8 = READ_BYTE(frame);
                 // push(frame.slots[slot])
                 push(vm.stack[frame.slotsIndex + slot])
                 break
             }
             case OpCode.OP_SET_LOCAL: {
-                const slot: u8 = READ_BYTE()
+                const slot: u8 = READ_BYTE(frame)
                 // vm.stack[slot] = peek(0)
                 // frame.slots[slot] = peek(0)
                 vm.stack[frame.slotsIndex + slot] = peek(0)
                 break
             }
             case OpCode.OP_GET_GLOBAL: {
-                const name: ObjString = READ_STRING()
+                const name: ObjString = READ_STRING(frame)
                 const value: Value | null = tableGet(vm.globals, name)
                 if (value === null) {
                     runtimeError(`Undefined variable get ${name.chars}.`)
@@ -251,13 +297,13 @@ export function run(): InterpretResult {
                 break
             }
             case OpCode.OP_DEFINE_GLOBAL: {
-                const name: ObjString = READ_STRING()
+                const name: ObjString = READ_STRING(frame)
                 tableSet(vm.globals, name, peek(0))
                 pop()
                 break
             }
             case OpCode.OP_SET_GLOBAL: {
-                const name: ObjString = READ_STRING()
+                const name: ObjString = READ_STRING(frame)
                 if (tableSet(vm.globals, name, peek(0))) {
                     tableDelete(vm.globals, name)
                     runtimeError(`Undefined variable set ${name.chars}.`)
@@ -333,22 +379,31 @@ export function run(): InterpretResult {
                 break
             }
             case OpCode.OP_JUMP: {
-                const offset: u16 = READ_SHORT()
+                const offset: u16 = READ_SHORT(frame)
                 // vm.ip += offset
-                frame.ip += offset
+                frame.ip += <u8>offset
                 break;
             }
             case OpCode.OP_JUMP_IF_FALSE: {
-                const offset: u16 = READ_SHORT()
+                const offset: u16 = READ_SHORT(frame)
                 // if (isFalsey(peek(0))) vm.ip += offset
                 if (isFalsey(peek(0))) frame.ip += offset
                 break
             }
             case OpCode.OP_LOOP: {
-                const offset: u16 = READ_SHORT()
+                const offset: u16 = READ_SHORT(frame)
                 // vm.ip -= offset
                 frame.ip -= offset
                 break
+            }
+            case OpCode.OP_CALL: {
+                const argCount: u8 = READ_BYTE(frame)
+                if (!callValue(peek(argCount), argCount)) {
+                  return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                }
+                // if call was successful, it will have created a new frame for us
+                frame = vm.frames[vm.frameCount - 1]
+                break;
             }
             case OpCode.OP_RETURN:
                 // console.log(`return ${printValueToString(pop())}`)
@@ -377,15 +432,17 @@ export function interpret(source: string): InterpretResult {
     const myfunction: ObjFunction | null = compile(source)
     if (myfunction === null) return InterpretResult.INTERPRET_COMPILE_ERROR
 
-    push(OBJ_VAL(myfunction))
-    // vm. frames array is already filled with new initialized CallFrame objects
+    push(OBJ_VAL(myfunction)) // should be a value with function type
 
-    // increment frameCount before giving out the first frame to the program,
-    // so the compiler can implicityly claim the first stack slot for the VMs own internal use
-    const frame: CallFrame = vm.frames[vm.frameCount++]
-    frame.function = myfunction
-    // frame.ip already initliaized
-    // frame.slotIndex already initialized 0
+    // // vm. frames array is already filled with new initialized CallFrame objects
+    // // increment frameCount before giving out the first frame to the program,
+    // // so the compiler can implicityly claim the first stack slot for the VMs own internal use
+    // const frame: CallFrame = vm.frames[vm.frameCount++]
+    // frame.function = myfunction
+    // // frame.ip already initliaized
+    // // frame.slotIndex already initialized 0
+
+    call(myfunction, 0);
 
     return run()
 
