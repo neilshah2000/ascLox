@@ -3,6 +3,8 @@ const STACK_MAX = 256
 
 export class CallFrame {
     function: ObjFunction = new ObjFunction()
+    // pointer for bytecode in the chunk in the function
+    // doesnt reference anything in the vm
     ip: u32 = 0 // not a pointer like cLox
     // How can we only have u8 for ip, when jumps are sometimes 2 bytes??
     // ANS: We get the u8 type when we dereference the pointer to the code array. ip can be any size
@@ -21,7 +23,7 @@ export class CallFrame {
 }
 
 export class VM {
-
+    // each slot in the array references the same single CallFrame object
     frames: StaticArray<CallFrame> = new StaticArray<CallFrame>(FRAMES_MAX).fill(new CallFrame())
     frameCount: i32 = 0
 
@@ -89,16 +91,22 @@ function resetStack(): void {
 
 function runtimeError(format: string): void {
     let errorStr = ''
-    errorStr = errorStr + format
+    errorStr = errorStr + format + '\n'
 
-    // const instruction: u16 = vm.ip - 1
-    // const line: u16 = vm.chunk.lines[instruction]
+    for (let i = vm.frameCount - 1; i >= 0; i--) {
+        const frame: CallFrame = vm.frames[i];
+        const myfunction: ObjFunction = frame.function;
+        // no pointer artithmatic needed unlike cLox, because we already have the index
+        const instructionIndex: u32 = frame.ip - 1;
+        const line: u16 = myfunction.chunk.lines[instructionIndex]
 
-    const frame: CallFrame = vm.frames[vm.frameCount - 1]
-    const instruction: u32 = frame.ip - 1
-    const line: u16 = frame.function.chunk.lines[instruction]
+        errorStr = errorStr + `[line ${line}] in `
+        let fnName  = ''
+        if (myfunction.name.chars == '') fnName = 'script\n'
+        else fnName = myfunction.name.chars + '\n'
+        errorStr = errorStr + fnName
+    }
 
-    errorStr = errorStr + `[line ${line}] in script`
     console.log(errorStr)
     resetStack()
 }
@@ -138,7 +146,20 @@ function peek(distance: i32): Value {
 }
 
 function call(myFunction: ObjFunction, argCount: u8): bool {
-    const frame: CallFrame = vm.frames[vm.frameCount++]
+    if (argCount != myFunction.arity) {
+        runtimeError(`Expected ${myFunction.arity} arguments but got ${argCount}.`);
+        return false;
+    }
+    if (vm.frameCount == FRAMES_MAX) {
+        runtimeError("Stack overflow.");
+        return false;
+    }
+
+    // create new CallFrames
+    const frame: CallFrame = new CallFrame()
+    vm.frames[vm.frameCount] = frame
+    vm.frameCount++
+
     frame.function = myFunction
     // This simply initializes the next CallFrame on the stack.
     // It stores a pointer to the function being called

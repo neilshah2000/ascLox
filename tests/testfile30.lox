@@ -1,0 +1,13 @@
+fun areWeHavingItYet() {
+    print "Yes we are!";
+}
+
+fun blah() {
+    print areWeHavingItYet(false);
+}
+
+fun something() {
+    blah();
+}
+
+something();
