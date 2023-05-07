@@ -19,6 +19,7 @@ export class CallFrame {
     // for start of the callframes slot window we do vm.stack[frame.slotsIndex]
     // and to offset from there, we do vm.stack[frame.slotsIndex + offset]
     // TODO: create functioons for these
+    // slots are relative to this but it doesnt get incremented
     slotsIndex: i32 = 0
 }
 
@@ -426,10 +427,19 @@ export function run(): InterpretResult {
                 frame = vm.frames[vm.frameCount - 1]
                 break;
             }
-            case OpCode.OP_RETURN:
-                // console.log(`return ${printValueToString(pop())}`)
-                // exit interpreter
-                return InterpretResult.INTERPRET_OK
+            case OpCode.OP_RETURN: {
+                const result: Value = pop();
+                vm.frameCount--;
+                if (vm.frameCount == 0) {
+                    pop();
+                    return InterpretResult.INTERPRET_OK;
+                }
+                // else, we discard all of the slots the callee was using for its parameters and local variables
+                vm.stackTop = frame.slotsIndex;
+                push(result);
+                frame = vm.frames[vm.frameCount - 1];
+                break;
+            }
         }
     }
 }

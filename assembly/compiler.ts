@@ -195,6 +195,7 @@ function emitLoop(loopStart: i32): void {
 }
 
 function emitReturn(): void {
+    emitByte(OpCode.OP_NIL);
     emitByte(OpCode.OP_RETURN)
 }
 
@@ -746,6 +747,20 @@ function printStatement(): void {
     emitByte(OpCode.OP_PRINT)
 }
 
+function returnStatement(): void {
+    if (current.type === FunctionType.TYPE_SCRIPT) {
+        error("Can't return from top-level code.");
+    }
+
+    if (match(TokenType.TOKEN_SEMICOLON)) {
+      emitReturn();
+    } else {
+      expression();
+      consume(TokenType.TOKEN_SEMICOLON, "Expect ';' after return value.");
+      emitByte(OpCode.OP_RETURN);
+    }
+}
+
 function whileStatement(): void {
     const loopStart: i32 = currentChunk().count
     consume(TokenType.TOKEN_LEFT_PAREN, "Expect '(' after 'while'.")
@@ -805,6 +820,8 @@ function statement(): void {
         forStatement()
     } else if (match(TokenType.TOKEN_IF)) {
         ifStatement()
+    } else if (match(TokenType.TOKEN_RETURN)) {
+        returnStatement();
     } else if (match(TokenType.TOKEN_WHILE)) {
         whileStatement()
     } else if (match(TokenType.TOKEN_LEFT_BRACE)) {
