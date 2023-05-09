@@ -5,6 +5,7 @@ import { Chunk } from './chunk'
 
 export enum ObjType {
     OBJ_FUNCTION,
+    OBJ_NATIVE,
     OBJ_STRING,
 }
 
@@ -24,6 +25,18 @@ export class ObjFunction extends Obj {
     }
 }
 
+export type NativeFn = (args: Array<Value>) => Value
+
+export class ObjNative extends Obj {
+    natFunction: NativeFn = () => new Value()
+
+    constructor(nativefn: NativeFn) {
+        super()
+        this.natFunction = nativefn
+        this.type = ObjType.OBJ_NATIVE
+    }
+}
+
 export class ObjString extends Obj {
     length: i32 = 0
     // do not store hash, we dont build our own hashtable
@@ -39,6 +52,10 @@ export function IS_FUNCTION(value: Value): bool {
     return isObjectType(value, ObjType.OBJ_FUNCTION)
 }
 
+export function IS_NATIVE(value: Value): bool {
+    return isObjectType(value, ObjType.OBJ_NATIVE)
+}
+
 export function IS_STRING(value: Value): bool {
     return isObjectType(value, ObjType.OBJ_STRING)
 }
@@ -46,6 +63,11 @@ export function IS_STRING(value: Value): bool {
 // returns ObjFunction
 export function AS_FUNCTION(value: Value): ObjFunction {
     return <ObjFunction>AS_OBJ(value)
+}
+
+// returns ObjFunction
+export function AS_NATIVE(value: Value): NativeFn {
+    return (<ObjNative>AS_OBJ(value)).natFunction
 }
 
 // returns ObjString

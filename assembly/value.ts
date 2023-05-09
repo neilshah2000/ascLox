@@ -82,6 +82,8 @@ function objectToString(objectValue: Value): string {
             return AS_AS_STRING(objectValue)
         case ObjType.OBJ_FUNCTION:
             return printFunction(AS_FUNCTION(objectValue))
+        case ObjType.OBJ_NATIVE:
+            return '<native fn>'
         default:
             return '' // should be unreachable
     }

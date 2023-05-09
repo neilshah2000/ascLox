@@ -65,7 +65,7 @@ import {
     ValueType,
 } from './value'
 import { compile, printTokens } from './compiler'
-import { AS_STRING, IS_STRING, OBJ_TYPE, Obj, ObjFunction, ObjString, takeString, ObjType, AS_FUNCTION } from './object'
+import { AS_STRING, IS_STRING, OBJ_TYPE, Obj, ObjFunction, ObjString, takeString, ObjType, AS_FUNCTION, NativeFn, AS_NATIVE, copyString, ObjNative } from './object'
 import { freeObjects } from './memory'
 import { freeTable, initTable, Table, tableDelete, tableGet, tableSet } from './table'
 
@@ -112,6 +112,14 @@ function runtimeError(format: string): void {
     resetStack()
 }
 
+function defineNative(name: string, myfunction: NativeFn): void {
+    push(OBJ_VAL(copyString(name)));
+    push(OBJ_VAL(new ObjNative(myfunction)));
+    tableSet(vm.globals, AS_STRING(vm.stack[0]), vm.stack[1]);
+    pop();
+    pop();
+  }
+
 export function initVM(): void {
     vm = new VM()
 
@@ -119,6 +127,13 @@ export function initVM(): void {
 
     vm.globals = initTable()
     vm.strings = initTable()
+
+    defineNative("clock", clockNative);
+}
+
+function clockNative(args: Array<Value>): Value {
+    // return NUMBER_VAL(0)
+    return NUMBER_VAL(<f64>(process.hrtime()));
 }
 
 export function freeVM(): void {
@@ -178,6 +193,13 @@ function callValue(callee: Value, argCount: u8): bool {
         switch (OBJ_TYPE(callee)) {
             case ObjType.OBJ_FUNCTION: 
                 return call(AS_FUNCTION(callee), argCount);
+            case ObjType.OBJ_NATIVE: {
+                const native: NativeFn = AS_NATIVE(callee);
+                const result: Value = native(vm.stack.slice(vm.stackTop - argCount, vm.stackTop - 1));
+                vm.stackTop -= argCount + 1; // ??
+                push(result);
+                return true;
+                }
             default:
                 break; // Non-callable object type.
         }
@@ -447,6 +469,8 @@ export function run(): InterpretResult {
 // removed chunk as argument
 export function interpret(source: string): InterpretResult {
     printTokens(source) // testing the scanner
+
+    console.log(process.platform)
 
     /////////////
     // const chunk: Chunk = new Chunk()
