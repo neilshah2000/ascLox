@@ -131,9 +131,11 @@ export function initVM(): void {
     defineNative("clock", clockNative);
 }
 
+// getting timer function
+// https://dr.lib.iastate.edu/server/api/core/bitstreams/cfd12617-3042-4724-b98c-2b6a65d22279/content
 function clockNative(args: Array<Value>): Value {
     // return NUMBER_VAL(0)
-    return NUMBER_VAL(<f64>(process.hrtime()));
+    return NUMBER_VAL(<f64>(Date.now()));
 }
 
 export function freeVM(): void {
