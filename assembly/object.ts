@@ -4,6 +4,7 @@ import { vm } from './vm'
 import { Chunk } from './chunk'
 
 export enum ObjType {
+    OBJ_CLOSURE,
     OBJ_FUNCTION,
     OBJ_NATIVE,
     OBJ_STRING,
@@ -43,9 +44,23 @@ export class ObjString extends Obj {
     chars: string = ''
 }
 
+export class ObjClosure extends Obj {
+    func: ObjFunction
+
+    constructor(myFunc: ObjFunction) {
+        super()
+        this.func = myFunc
+        this.type = ObjType.OBJ_CLOSURE
+    }
+}
+
 // returns the type of object from the value
 export function OBJ_TYPE(value: Value): ObjType {
     return AS_OBJ(value).type
+}
+
+export function IS_CLOSURE(value: Value): bool {
+    return isObjectType(value, ObjType.OBJ_CLOSURE)
 }
 
 export function IS_FUNCTION(value: Value): bool {
@@ -58,6 +73,11 @@ export function IS_NATIVE(value: Value): bool {
 
 export function IS_STRING(value: Value): bool {
     return isObjectType(value, ObjType.OBJ_STRING)
+}
+
+// returns ObjClosure
+export function AS_CLOSURE(value: Value): ObjClosure {
+    return <ObjClosure>AS_OBJ(value)
 }
 
 // returns ObjFunction
