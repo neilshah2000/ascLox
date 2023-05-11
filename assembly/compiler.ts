@@ -647,8 +647,7 @@ function funCompile(type: FunctionType): void {
     block()
 
     const myFunction: ObjFunction = endCompiler()
-    emitBytes(OpCode.OP_CONSTANT, makeConstant(OBJ_VAL(myFunction)))
-
+    emitBytes(OpCode.OP_CLOSURE, makeConstant(OBJ_VAL(myFunction)));
 }
 
 function funDeclaration(): void {

@@ -114,6 +114,13 @@ export const disassembleInstruction = (chunk: Chunk, offset: u32): u32 => {
         case OpCode.OP_CALL: {
             return byteInstruction(`${info} OP_CALL`, chunk, offset)
         }
+        case OpCode.OP_CLOSURE: {
+            offset++;
+            const constant: u8 = chunk.code[offset++];
+            const myStr = `${info} OP_CLOSURE ${constant} ${printValueToString(chunk.constants.values[constant])}`
+            console.log(myStr)
+            return offset;
+        }
         case OpCode.OP_RETURN: {
             return simpleInstruction(`${info} OP_RETURN`, offset)
         }

@@ -2,7 +2,7 @@ const FRAMES_MAX = 64
 const STACK_MAX = 256
 
 export class CallFrame {
-    function: ObjFunction = new ObjFunction()
+    closure: ObjClosure = new ObjClosure(new ObjFunction())
     // pointer for bytecode in the chunk in the function
     // doesnt reference anything in the vm
     ip: u32 = 0 // not a pointer like cLox
@@ -65,7 +65,7 @@ import {
     ValueType,
 } from './value'
 import { compile, printTokens } from './compiler'
-import { AS_STRING, IS_STRING, OBJ_TYPE, Obj, ObjFunction, ObjString, takeString, ObjType, AS_FUNCTION, NativeFn, AS_NATIVE, copyString, ObjNative } from './object'
+import { AS_STRING, IS_STRING, OBJ_TYPE, Obj, ObjFunction, ObjString, takeString, ObjType, AS_FUNCTION, NativeFn, AS_NATIVE, copyString, ObjNative, ObjClosure, AS_CLOSURE } from './object'
 import { freeObjects } from './memory'
 import { freeTable, initTable, Table, tableDelete, tableGet, tableSet } from './table'
 
@@ -96,7 +96,7 @@ function runtimeError(format: string): void {
 
     for (let i = vm.frameCount - 1; i >= 0; i--) {
         const frame: CallFrame = vm.frames[i];
-        const myfunction: ObjFunction = frame.function;
+        const myfunction: ObjFunction = frame.closure.func;
         // no pointer artithmatic needed unlike cLox, because we already have the index
         const instructionIndex: u32 = frame.ip - 1;
         const line: u16 = myfunction.chunk.lines[instructionIndex]
@@ -163,9 +163,9 @@ function peek(distance: i32): Value {
     return vm.stack[vm.stackTop - 1 - distance]
 }
 
-function call(myFunction: ObjFunction, argCount: u8): bool {
-    if (argCount != myFunction.arity) {
-        runtimeError(`Expected ${myFunction.arity} arguments but got ${argCount}.`);
+function call(closure: ObjClosure, argCount: u8): bool {
+    if (argCount != closure.func.arity) {
+        runtimeError(`Expected ${closure.func.arity} arguments but got ${argCount}.`);
         return false;
     }
     if (vm.frameCount == FRAMES_MAX) {
@@ -178,7 +178,7 @@ function call(myFunction: ObjFunction, argCount: u8): bool {
     vm.frames[vm.frameCount] = frame
     vm.frameCount++
 
-    frame.function = myFunction
+    frame.closure = closure
     // This simply initializes the next CallFrame on the stack.
     // It stores a pointer to the function being called
     // and points the frame’s ip to the beginning of the function’s bytecode.
@@ -193,8 +193,8 @@ function call(myFunction: ObjFunction, argCount: u8): bool {
 function callValue(callee: Value, argCount: u8): bool {
     if (IS_OBJ(callee)) {
         switch (OBJ_TYPE(callee)) {
-            case ObjType.OBJ_FUNCTION: 
-                return call(AS_FUNCTION(callee), argCount);
+            case ObjType.OBJ_CLOSURE:
+                return call(AS_CLOSURE(callee), argCount);
             case ObjType.OBJ_NATIVE: {
                 const native: NativeFn = AS_NATIVE(callee);
                 const result: Value = native(vm.stack.slice(vm.stackTop - argCount, vm.stackTop - 1));
@@ -236,13 +236,13 @@ export function run(): InterpretResult {
 
     const READ_BYTE = (myFrame: CallFrame): u8 => {
         // console.log(`reading byte from frame at ip ${myFrame.ip}`)
-        return myFrame.function.chunk.code[myFrame.ip++]
+        return myFrame.closure.func.chunk.code[myFrame.ip++]
     }
 
     const READ_CONSTANT = (myFrame: CallFrame): Value => {
         const valueIndex = READ_BYTE(myFrame)
         // console.log(`read constant index ${valueIndex} from frame ${vm.frameCount - 1}`)
-        const constant = myFrame.function.chunk.constants.values[valueIndex]
+        const constant = myFrame.closure.func.chunk.constants.values[valueIndex]
         // console.log(`read constant ${constant}`)
         return constant
     }
@@ -250,7 +250,7 @@ export function run(): InterpretResult {
     // takes next 2 bytes from the chunk and builds a 16-bit integer from them
     const READ_SHORT = (myFrame: CallFrame): u16 => {
         myFrame.ip += 2;
-        const short: u16 = <u16>((myFrame.function.chunk.code[myFrame.ip - 2] << 8) | myFrame.function.chunk.code[myFrame.ip - 1])
+        const short: u16 = <u16>((myFrame.closure.func.chunk.code[myFrame.ip - 2] << 8) | myFrame.closure.func.chunk.code[myFrame.ip - 1])
         return short
     }
 
@@ -297,7 +297,7 @@ export function run(): InterpretResult {
         // unlike clox, we are using indexes for ip not pointers, so we dont need to 
         // minus start pointer (frame->function->chunk->code) to get the offset
         // we already have the ip as a relative offset from beginning of bytecode
-        disassembleInstruction(frame.function.chunk, frame.ip)
+        disassembleInstruction(frame.closure.func.chunk, frame.ip)
         // END DEBUG_TRACE_EXECUTION
 
         let instruction: u8 = READ_BYTE(frame)
@@ -451,6 +451,12 @@ export function run(): InterpretResult {
                 frame = vm.frames[vm.frameCount - 1]
                 break;
             }
+            case OpCode.OP_CLOSURE: {
+                const myfunction: ObjFunction = AS_FUNCTION(READ_CONSTANT(frame));
+                const closure: ObjClosure = new ObjClosure(myfunction);
+                push(OBJ_VAL(closure));
+                break;
+            }
             case OpCode.OP_RETURN: {
                 const result: Value = pop();
                 vm.frameCount--;
@@ -490,6 +496,9 @@ export function interpret(source: string): InterpretResult {
     if (myfunction === null) return InterpretResult.INTERPRET_COMPILE_ERROR
 
     push(OBJ_VAL(myfunction)) // should be a value with function type
+    const closure: ObjClosure = new ObjClosure(myfunction)
+    pop()
+    push(OBJ_VAL(closure));
 
     // // vm. frames array is already filled with new initialized CallFrame objects
     // // increment frameCount before giving out the first frame to the program,
@@ -499,7 +508,7 @@ export function interpret(source: string): InterpretResult {
     // // frame.ip already initliaized
     // // frame.slotIndex already initialized 0
 
-    call(myfunction, 0);
+    call(closure, 0);
 
     return run()
 
