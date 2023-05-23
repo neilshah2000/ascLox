@@ -8,6 +8,7 @@ export enum ObjType {
     OBJ_FUNCTION,
     OBJ_NATIVE,
     OBJ_STRING,
+    OBJ_UPVALUE
 }
 
 export class Obj {
@@ -42,6 +43,14 @@ export class ObjString extends Obj {
     length: i32 = 0
     // do not store hash, we dont build our own hashtable
     chars: string = ''
+}
+
+export class ObjUpvalue extends Obj {
+    location: Value = new Value()
+    constructor() {
+        super()
+        this.type = ObjType.OBJ_UPVALUE
+    }
 }
 
 export class ObjClosure extends Obj {
@@ -121,6 +130,13 @@ export function copyString(myString: string): ObjString {
     return allocateString(copy)
 }
 
+
+export function newUpvalue(slot: Value): ObjUpvalue {
+    const upvalue: ObjUpvalue = ALLOCATE_OBJ(ObjUpvalue, ObjType.OBJ_UPVALUE);
+    upvalue.location = slot;
+    return upvalue;
+}
+
 export function printFunction(myFunction: ObjFunction): string {
     if (myFunction.name.chars == '') { // clox tests for function.name == null, we test for name.chars is empty string
         return '<script>'
@@ -157,6 +173,9 @@ function ALLOCATE_OBJ(type: ObjType): Obj {
         case ObjType.OBJ_STRING:
             obj = new ObjString()
             break
+        case ObjType.OBJ_UPVALUE:
+            obj = new ObjUpvalue()
+            break
     }
 
     // update linked list of all objects stored in vm
@@ -186,6 +205,10 @@ export function traversePrintObjects(start: Obj | null): void {
                 const myStringObj = <ObjString>next
                 console.log(`string: ${myStringObj.chars}`)
                 break
+            case ObjType.OBJ_UPVALUE:
+                console.log("upvalue");
+                break;
+              
             default:
                 console.log('object not recognised')
         }
