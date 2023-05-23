@@ -4,6 +4,7 @@ import { vm } from './vm'
 
 export enum ObjType {
     OBJ_STRING,
+    OBJ_UPVALUE
 }
 
 export class Obj {
@@ -15,6 +16,14 @@ export class ObjString extends Obj {
     length: i32 = 0
     // do not store hash, we dont build our own hashtable
     chars: string = ''
+}
+
+export class ObjUpvalue extends Obj {
+    location: Value = new Value()
+    constructor() {
+        super()
+        this.type = ObjType.OBJ_UPVALUE
+    }
 }
 
 // returns the type of object from the value
@@ -57,6 +66,12 @@ export function copyString(myString: string): ObjString {
     return allocateString(copy)
 }
 
+export function newUpvalue(slot: Value): ObjUpvalue {
+    const upvalue: ObjUpvalue = ALLOCATE_OBJ(ObjUpvalue, ObjType.OBJ_UPVALUE);
+    upvalue.location = slot;
+    return upvalue;
+}
+
 // takes ownership of the original string
 // does not copy it
 export function takeString(myString: string): ObjString {
@@ -86,6 +101,9 @@ function ALLOCATE_OBJ(type: ObjType): Obj {
         case ObjType.OBJ_STRING:
             obj = new ObjString()
             break
+        case ObjType.OBJ_UPVALUE:
+            obj = new ObjUpvalue()
+            break
     }
 
     // update linked list of all objects stored in vm
@@ -110,6 +128,10 @@ export function traversePrintObjects(start: Obj | null): void {
                 const myStringObj = <ObjString>next
                 console.log(`string: ${myStringObj.chars}`)
                 break
+            case ObjType.OBJ_UPVALUE:
+                console.log("upvalue");
+                break;
+              
             default:
                 console.log('object not recognised')
         }
