@@ -1,8 +1,12 @@
 import { tableFindString, tableSet } from './table'
 import { AS_OBJ, IS_OBJ, NIL_VAL, Value } from './value'
 import { vm } from './vm'
+import { Chunk } from './chunk'
 
 export enum ObjType {
+    OBJ_CLOSURE,
+    OBJ_FUNCTION,
+    OBJ_NATIVE,
     OBJ_STRING,
     OBJ_UPVALUE
 }
@@ -10,6 +14,29 @@ export enum ObjType {
 export class Obj {
     type: ObjType = ObjType.OBJ_STRING
     next: Obj | null = null // make this an intrusive linked list to keep track of all Objs
+}
+
+export class ObjFunction extends Obj {
+    arity: u8 = 0
+    chunk: Chunk = new Chunk()
+    name: ObjString = new ObjString()
+
+    constructor () {
+        super()
+        this.type = ObjType.OBJ_FUNCTION
+    }
+}
+
+export type NativeFn = (args: Array<Value>) => Value
+
+export class ObjNative extends Obj {
+    natFunction: NativeFn = () => new Value()
+
+    constructor(nativefn: NativeFn) {
+        super()
+        this.natFunction = nativefn
+        this.type = ObjType.OBJ_NATIVE
+    }
 }
 
 export class ObjString extends Obj {
@@ -26,13 +53,50 @@ export class ObjUpvalue extends Obj {
     }
 }
 
+export class ObjClosure extends Obj {
+    func: ObjFunction
+
+    constructor(myFunc: ObjFunction) {
+        super()
+        this.func = myFunc
+        this.type = ObjType.OBJ_CLOSURE
+    }
+}
+
 // returns the type of object from the value
 export function OBJ_TYPE(value: Value): ObjType {
     return AS_OBJ(value).type
 }
 
+export function IS_CLOSURE(value: Value): bool {
+    return isObjectType(value, ObjType.OBJ_CLOSURE)
+}
+
+export function IS_FUNCTION(value: Value): bool {
+    return isObjectType(value, ObjType.OBJ_FUNCTION)
+}
+
+export function IS_NATIVE(value: Value): bool {
+    return isObjectType(value, ObjType.OBJ_NATIVE)
+}
+
 export function IS_STRING(value: Value): bool {
     return isObjectType(value, ObjType.OBJ_STRING)
+}
+
+// returns ObjClosure
+export function AS_CLOSURE(value: Value): ObjClosure {
+    return <ObjClosure>AS_OBJ(value)
+}
+
+// returns ObjFunction
+export function AS_FUNCTION(value: Value): ObjFunction {
+    return <ObjFunction>AS_OBJ(value)
+}
+
+// returns ObjFunction
+export function AS_NATIVE(value: Value): NativeFn {
+    return (<ObjNative>AS_OBJ(value)).natFunction
 }
 
 // returns ObjString
@@ -66,10 +130,18 @@ export function copyString(myString: string): ObjString {
     return allocateString(copy)
 }
 
+
 export function newUpvalue(slot: Value): ObjUpvalue {
     const upvalue: ObjUpvalue = ALLOCATE_OBJ(ObjUpvalue, ObjType.OBJ_UPVALUE);
     upvalue.location = slot;
     return upvalue;
+}
+
+export function printFunction(myFunction: ObjFunction): string {
+    if (myFunction.name.chars == '') { // clox tests for function.name == null, we test for name.chars is empty string
+        return '<script>'
+    }
+    return `<fn ${myFunction.name.chars}>`
 }
 
 // takes ownership of the original string
@@ -124,6 +196,11 @@ export function traversePrintObjects(start: Obj | null): void {
     while (next !== null) {
         const type = next.type
         switch (type) {
+            case ObjType.OBJ_FUNCTION:
+                const myFunctionObj = <ObjFunction>next
+                const fnStr = printFunction(myFunctionObj)
+                console.log(fnStr)
+                break
             case ObjType.OBJ_STRING:
                 const myStringObj = <ObjString>next
                 console.log(`string: ${myStringObj.chars}`)

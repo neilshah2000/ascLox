@@ -2,7 +2,7 @@ import { Token, TokenType, initScanner, scanToken, tokenTypeStrings } from './sc
 import { Chunk, OpCode } from './chunk'
 import { NUMBER_VAL, OBJ_VAL, Value } from './value'
 import { disassembleChunk } from './debug'
-import { copyString } from './object'
+import { copyString, ObjFunction } from './object'
 
 class Parser {
     current: Token = new Token()
@@ -44,9 +44,19 @@ class Local {
     depth: i32 = 0 // numbered nesting level, 0 is global, 1 first top-level ..etc
 }
 
+enum FunctionType {
+    TYPE_FUNCTION,
+    TYPE_SCRIPT
+}
+
 const U8_COUNT = 256
 class Compiler {
-    locals: Local[] = new Array<Local>(U8_COUNT)
+    enclosing: Compiler | null = null
+    function: ObjFunction = new ObjFunction()
+    type: FunctionType = FunctionType.TYPE_SCRIPT
+
+    // keeps track of which stack slots are associated with which local variables or temporaries
+    locals: Local[] = new Array<Local>(U8_COUNT).fill(new Local())
     localCount: i32 = 0
     scopeDepth: i32 = 0
 }
@@ -54,10 +64,9 @@ class Compiler {
 // global variable. TODO: use @global decorator??
 let parser: Parser = new Parser()
 let current: Compiler = new Compiler()
-let compilingChunk: Chunk = new Chunk()
 
 function currentChunk(): Chunk {
-    return compilingChunk
+    return current.function.chunk
 }
 
 function errorAt(token: Token, message: string): void {
@@ -109,10 +118,11 @@ export function printTokens(source: string): void {
     console.log(lineStr)
 }
 
-export function compile(source: string, chunk: Chunk): bool {
+export function compile(source: string): ObjFunction | null {
     initScanner(source)
-    initCompiler()
-    compilingChunk = chunk
+    const compiler: Compiler = new Compiler() // compiler is stored on the stack in this compile() function
+    initCompiler(compiler, FunctionType.TYPE_SCRIPT) // top level compiler
+
 
     parser.hadError = false
     parser.panicMode = false
@@ -123,8 +133,8 @@ export function compile(source: string, chunk: Chunk): bool {
         declaration()
     }
 
-    endCompiler()
-    return !parser.hadError
+    const myFunction: ObjFunction = endCompiler()
+    return parser.hadError ? null : myFunction
 }
 
 function advance(): void {
@@ -185,6 +195,7 @@ function emitLoop(loopStart: i32): void {
 }
 
 function emitReturn(): void {
+    emitByte(OpCode.OP_NIL);
     emitByte(OpCode.OP_RETURN)
 }
 
@@ -216,17 +227,56 @@ function patchJump(offset: i32): void {
     currentChunk().code[offset + 1] = jump & 0xff
 }
 
-function initCompiler(): void {
-    current = new Compiler()
-    console.log('init compiler')
+// TODO: can't pass a pointer and initialize it here
+function initCompiler(compiler: Compiler, type: FunctionType): void {
+    // for top level code, the enclosing compiler is null
+    if (type === FunctionType.TYPE_SCRIPT) {
+        console.log('== setting up TOP LEVEL compiler ==')
+        compiler.enclosing = null
+    } else {
+        compiler.enclosing = current
+    }
+    //////////////
+
+    // compiler.function = null
+    compiler.type = type
+    compiler.localCount = 0
+    compiler.scopeDepth = 0
+    compiler.function = new ObjFunction()
+    
+    // store in 'current' global variable
+    current = compiler
+
+    if (type !== FunctionType.TYPE_SCRIPT) {
+        current.function.name = copyString(parser.previous.lexeme) // different to cLox
+        console.log(`== setting up fn ${current.function.name.chars} compiler ==`)
+    }
+
+    const local: Local = current.locals[current.localCount++]
+    // stack slot 0 for the VM'c own internal use. function name will be '' here
+    local.depth = 0
+    local.name.lexeme = ''
 }
 
-function endCompiler(): void {
+function endCompiler(): ObjFunction {
     emitReturn()
+    const myFunction: ObjFunction = current.function
+
     // TODO: put behind debug flag
     if (!parser.hadError) {
-        disassembleChunk(currentChunk(), 'bytecode')
+        // test function name for '' to check if top level code
+        disassembleChunk(currentChunk(), myFunction.name.chars !== '' ?  myFunction.name.chars : '<script>')
     }
+
+    // maybe we could have used function type == script to check if top level code, instead of messing about with null
+    if (current.enclosing !== null) {
+        console.log(`== end enclosing compiler for fn ${current.function.name.chars} ==`)
+        current = <Compiler>current.enclosing
+    }
+    else {
+        console.log('== end of TOP LEVEL compiler ==') // only to level compiler will have enclosing as null
+    }
+    return myFunction
 }
 
 function beginScope(): void {
@@ -246,7 +296,7 @@ function binary(canAssign: bool): void {
     const operatorType: TokenType = parser.previous.type
     const rule: ParseRule = getRule(operatorType)
     parsePrecedence(<Precedence>(rule.precedence + 1))
-    console.log('token type ' + operatorType.toString())
+    // console.log('token type ' + operatorType.toString())
     switch (operatorType) {
         case TokenType.TOKEN_BANG_EQUAL:
             emitBytes(OpCode.OP_EQUAL, OpCode.OP_NOT)
@@ -282,6 +332,12 @@ function binary(canAssign: bool): void {
             return // Unreachable
     }
 }
+
+function call(canAssign: bool): void {
+    const argCount: u8 = argumentList();
+    emitBytes(OpCode.OP_CALL, argCount);
+}
+  
 
 function literal(canAssign: bool): void {
     switch (parser.previous.type) {
@@ -375,7 +431,7 @@ function unary(canAssign: bool): void {
 }
 
 const rules: ParseRule[] = []
-rules[TokenType.TOKEN_LEFT_PAREN] = new ParseRule(grouping, null, Precedence.PREC_CALL)
+rules[TokenType.TOKEN_LEFT_PAREN] = new ParseRule(grouping, call, Precedence.PREC_CALL)
 rules[TokenType.TOKEN_RIGHT_PAREN] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_LEFT_BRACE] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_RIGHT_BRACE] = new ParseRule(null, null, Precedence.PREC_NONE)
@@ -515,6 +571,7 @@ function parseVariable(errorMessage: string): u8 {
 }
 
 function markInitialized(): void {
+    if (current.scopeDepth === 0) return
     current.locals[current.localCount - 1].depth = current.scopeDepth
 }
 
@@ -526,6 +583,21 @@ function defineVariable(global: u8): void {
 
     emitBytes(OpCode.OP_DEFINE_GLOBAL, global)
 }
+
+function argumentList(): u8 {
+    let argCount: u8 = 0;
+    if (!check(TokenType.TOKEN_RIGHT_PAREN)) {
+      do {
+        expression();
+        if (argCount === 255) {
+            error("Can't have more than 255 arguments.");
+        }
+        argCount++;
+      } while (match(TokenType.TOKEN_COMMA));
+    }
+    consume(TokenType.TOKEN_RIGHT_PAREN, "Expect ')' after arguments.");
+    return argCount;
+  }
 
 function and_(canAssign: bool): void {
     const endJump: i32 = emitJump(<u8>OpCode.OP_JUMP_IF_FALSE)
@@ -550,6 +622,40 @@ function block(): void {
     }
 
     consume(TokenType.TOKEN_RIGHT_BRACE, "Expect '}' after block.")
+}
+
+function funCompile(type: FunctionType): void {
+    const compiler: Compiler = new Compiler()
+    initCompiler(compiler, type) // not top level
+    beginScope()
+
+    consume(TokenType.TOKEN_LEFT_PAREN, "Expect '(' after function name.")
+    if (!check(TokenType.TOKEN_RIGHT_PAREN)) {
+        do {
+            current.function.arity++
+            if (current.function.arity > 255) {
+                errorAtCurrent("Can't have more than 255 parameters.")
+            }
+
+            const paramConstant: u8 = parseVariable("Expect parameter name.")
+            defineVariable(paramConstant)
+        } while (match(TokenType.TOKEN_COMMA))
+    }
+    consume(TokenType.TOKEN_RIGHT_PAREN, "Expect ')' after parameters.")
+
+    consume(TokenType.TOKEN_LEFT_BRACE, "Expect '{' before function body.")
+    block()
+
+    const myFunction: ObjFunction = endCompiler()
+    emitBytes(OpCode.OP_CONSTANT, makeConstant(OBJ_VAL(myFunction)))
+
+}
+
+function funDeclaration(): void {
+    const global: u8 = parseVariable("Expect function name.")
+    markInitialized()
+    funCompile(FunctionType.TYPE_FUNCTION)
+    defineVariable(global)
 }
 
 function varDeclaration(): void {
@@ -641,6 +747,20 @@ function printStatement(): void {
     emitByte(OpCode.OP_PRINT)
 }
 
+function returnStatement(): void {
+    if (current.type === FunctionType.TYPE_SCRIPT) {
+        error("Can't return from top-level code.");
+    }
+
+    if (match(TokenType.TOKEN_SEMICOLON)) {
+      emitReturn();
+    } else {
+      expression();
+      consume(TokenType.TOKEN_SEMICOLON, "Expect ';' after return value.");
+      emitByte(OpCode.OP_RETURN);
+    }
+}
+
 function whileStatement(): void {
     const loopStart: i32 = currentChunk().count
     consume(TokenType.TOKEN_LEFT_PAREN, "Expect '(' after 'while'.")
@@ -681,7 +801,10 @@ function synchronize(): void {
 }
 
 function declaration(): void {
-    if (match(TokenType.TOKEN_VAR)) {
+    if (match(TokenType.TOKEN_FUN)) {
+        funDeclaration()
+    }
+    else if (match(TokenType.TOKEN_VAR)) {
         varDeclaration()
     } else {
         statement()
@@ -697,6 +820,8 @@ function statement(): void {
         forStatement()
     } else if (match(TokenType.TOKEN_IF)) {
         ifStatement()
+    } else if (match(TokenType.TOKEN_RETURN)) {
+        returnStatement();
     } else if (match(TokenType.TOKEN_WHILE)) {
         whileStatement()
     } else if (match(TokenType.TOKEN_LEFT_BRACE)) {
