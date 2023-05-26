@@ -18,6 +18,7 @@ export class Obj {
 
 export class ObjFunction extends Obj {
     arity: u8 = 0
+    upvalueCount: u8 = 0
     chunk: Chunk = new Chunk()
     name: ObjString = new ObjString()
 
