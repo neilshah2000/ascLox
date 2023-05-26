@@ -1,5 +1,5 @@
 import { Chunk, OpCode } from './chunk'
-import { Obj, ObjString, ObjType } from './object'
+import { AS_FUNCTION, Obj, ObjFunction, ObjString, ObjType } from './object'
 import { printValueToString } from './value'
 
 const simpleInstruction = (name: string, offset: u32): u32 => {
@@ -72,6 +72,12 @@ export const disassembleInstruction = (chunk: Chunk, offset: u32): u32 => {
         case OpCode.OP_SET_GLOBAL: {
             return constantInstruction(`${info} OP_SET_GLOBAL`, chunk, offset)
         }
+        case OpCode.OP_GET_UPVALUE: {
+            return byteInstruction(`${info} OP_GET_UPVALUE`, chunk, offset);
+        }
+        case OpCode.OP_SET_UPVALUE: {
+            return byteInstruction(`${info} OP_SET_UPVALUE`, chunk, offset);
+        }
         case OpCode.OP_EQUAL: {
             return simpleInstruction(`${info} OP_EQUAL`, offset)
         }
@@ -117,8 +123,24 @@ export const disassembleInstruction = (chunk: Chunk, offset: u32): u32 => {
         case OpCode.OP_CLOSURE: {
             offset++;
             const constant: u8 = chunk.code[offset++];
-            const myStr = `${info} OP_CLOSURE ${constant} ${printValueToString(chunk.constants.values[constant])}`
+            const myStr = `${info} OP_CLOSURE \t${constant} \t\t\t${printValueToString(chunk.constants.values[constant])}`
             console.log(myStr)
+
+            
+            const myfunction: ObjFunction = AS_FUNCTION(chunk.constants.values[constant]);
+            for (let j: u8 = 0; j < myfunction.upvalueCount; j++) {
+                // upvalues
+                let upStr = ''
+                const isLocalConst = chunk.code[offset++];
+                // console.log('is local num ' + isLocalConst.toString())
+                // console.log('offset: ' + offset.toString())
+                const isLocal: bool = <bool>isLocalConst
+                const index: i32 = chunk.code[offset++];
+                upStr = upStr + `${offset - 2}\t\t\t\t\t\t|\t\t\t${isLocal ? "local" : "upvalue"} ${index}`
+                console.log(upStr)
+            }
+            
+
             return offset;
         }
         case OpCode.OP_RETURN: {

@@ -44,6 +44,11 @@ class Local {
     depth: i32 = 0 // numbered nesting level, 0 is global, 1 first top-level ..etc
 }
 
+class Upvalue {
+    index: u8 = 0
+    isLocal: bool = false
+}
+
 enum FunctionType {
     TYPE_FUNCTION,
     TYPE_SCRIPT
@@ -58,6 +63,8 @@ class Compiler {
     // keeps track of which stack slots are associated with which local variables or temporaries
     locals: Local[] = new Array<Local>(U8_COUNT).fill(new Local())
     localCount: i32 = 0
+    // Remember: going to be the same object referenced in each array slot
+    upvalues: Upvalue[] = new Array<Upvalue>(U8_COUNT).fill(new Upvalue())
     scopeDepth: i32 = 0
 }
 
@@ -393,10 +400,18 @@ function namedVariable(name: Token, canAssign: bool): void {
         getOp = OpCode.OP_GET_LOCAL
         setOp = OpCode.OP_SET_LOCAL
     } else {
-        arg = identifierConstant(name)
-        getOp = OpCode.OP_GET_GLOBAL
-        setOp = OpCode.OP_SET_GLOBAL
+        arg = resolveUpvalue(current, name)
+        if (arg !== -1) {
+            getOp = OpCode.OP_GET_UPVALUE;
+            setOp = OpCode.OP_SET_UPVALUE;
+        } else {
+            arg = identifierConstant(name)
+            getOp = OpCode.OP_GET_GLOBAL
+            setOp = OpCode.OP_SET_GLOBAL
+        }
     }
+    
+    
 
     if (canAssign && match(TokenType.TOKEN_EQUAL)) {
         expression()
@@ -407,7 +422,7 @@ function namedVariable(name: Token, canAssign: bool): void {
 }
 
 function variable(canAssign: bool): void {
-    console.log('variable')
+    // console.log('variable')
     namedVariable(parser.previous, canAssign)
 }
 
@@ -505,6 +520,7 @@ function identifiersEqual(a: Token, b:Token): bool {
 function resolveLocal(compiler: Compiler, name: Token): i32 {
     for (let i: i32 = compiler.localCount - 1; i >= 0; i--) {
         const local: Local = compiler.locals[i]
+        // console.log('checking local variable ' + local.name.lexeme + ', against our variable ' + name.lexeme)
         if (identifiersEqual(name, local.name)) {
             if (local.depth == -1) {
                 error("Can't read local variable in it's own initializer.")
@@ -514,6 +530,51 @@ function resolveLocal(compiler: Compiler, name: Token): i32 {
     }
 
     return -1
+}
+
+function addUpvalue(compiler: Compiler, index: u8, isLocal: bool): i32 {
+    const localStr = isLocal ? 'true' : 'false'
+    // console.log('adding upvalue to compiler with isLocal: ' + localStr)
+    // console.log('adding upvalue to compiler with index: ' + index.toString())
+    const upvalueCount: i32 = compiler.function.upvalueCount;
+
+    for (let i: i32 = 0; i < upvalueCount; i++) {
+        const upvalue: Upvalue = compiler.upvalues[i];
+        if (upvalue.index === index && upvalue.isLocal === isLocal) {
+            // console.log('found existing upvalue')
+            return i;
+        }
+    }
+
+    if (upvalueCount == U8_COUNT) {
+        error("Too many closure variables in function.");
+        return 0;
+    }
+
+    // add new upvalue object, otherwise they all reference the same one
+    compiler.upvalues[upvalueCount] = new Upvalue()
+    compiler.upvalues[upvalueCount].isLocal = isLocal;
+    compiler.upvalues[upvalueCount].index = index;
+    return compiler.function.upvalueCount++;
+}
+
+function resolveUpvalue(compiler: Compiler, name: Token): i32 {
+    if (compiler.enclosing === null) return -1;
+  
+    const local: i32 = resolveLocal(<Compiler>compiler.enclosing, name);
+    if (local !== -1) {
+        // console.log('adding local upvalue for ' + name.lexeme)
+        return addUpvalue(compiler, <u8>local, true);
+    }
+    // console.log('local not found for ' + name.lexeme + '. Searching surrounding scope')
+    // recursive call to capture from further surrounding scopes
+    const upvalue: i32 = resolveUpvalue(<Compiler>compiler.enclosing, name);
+    if (upvalue !== -1) {
+        // console.log('adding surrounding scope upvalue for ' + name.lexeme)
+        return addUpvalue(compiler, <u8>upvalue, false);
+    }
+  
+    return -1;
 }
 
 function addLocal(name: Token): void {
@@ -648,6 +709,18 @@ function funCompile(type: FunctionType): void {
 
     const myFunction: ObjFunction = endCompiler()
     emitBytes(OpCode.OP_CLOSURE, makeConstant(OBJ_VAL(myFunction)));
+
+    // for loop means variable sized encoding (depending on upvalueCount)
+    for (let i:u8 = 0; i < myFunction.upvalueCount; i++) {
+        // if (compiler.upvalues[i].isLocal) {
+        //     console.log('adding local byte')
+        // } else {
+        //     console.log('adding surrounding scope byte')
+        // }
+        // console.log('adding index byte: ' + compiler.upvalues[i].index.toString())
+        emitByte(compiler.upvalues[i].isLocal ? 1 : 0);
+        emitByte(compiler.upvalues[i].index);
+    }
 }
 
 function funDeclaration(): void {
