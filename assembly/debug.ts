@@ -143,6 +143,9 @@ export const disassembleInstruction = (chunk: Chunk, offset: u32): u32 => {
 
             return offset;
         }
+        case OpCode.OP_CLOSE_UPVALUE: {
+            return simpleInstruction(`${info} OP_CLOSE_UPVALUE`, offset);
+        }
         case OpCode.OP_RETURN: {
             return simpleInstruction(`${info} OP_RETURN`, offset)
         }
@@ -177,6 +180,6 @@ export function traverseAndPrintObjects(start: Obj | null): void {
             default:
                 console.log('object not recognised')
         }
-        next = next.next
+        next = next.nextObj
     }
 }

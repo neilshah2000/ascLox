@@ -41,7 +41,9 @@ class ParseRule {
 
 class Local {
     name: Token = new Token
-    depth: i32 = 0 // numbered nesting level, 0 is global, 1 first top-level ..etc
+    depth: i32 = -1 // numbered nesting level, 0 is global, 1 first top-level ..etc
+    // This field is true if the local is captured by any later nested function 
+    isCaptured: bool = false
 }
 
 class Upvalue {
@@ -259,9 +261,13 @@ function initCompiler(compiler: Compiler, type: FunctionType): void {
         console.log(`== setting up fn ${current.function.name.chars} compiler ==`)
     }
 
-    const local: Local = current.locals[current.localCount++]
+    const local: Local = new Local()
+    current.locals[current.localCount] = local
+    current.localCount++
+
     // stack slot 0 for the VM'c own internal use. function name will be '' here
     local.depth = 0
+    local.isCaptured = false
     local.name.lexeme = ''
 }
 
@@ -287,14 +293,20 @@ function endCompiler(): ObjFunction {
 }
 
 function beginScope(): void {
+    console.log('beginning scope')
     current.scopeDepth++
 }
 
 function endScope(): void {
     current.scopeDepth--
-
+    console.log('ending scope')
     while (current.localCount > 0 && current.locals[current.localCount - 1].depth > current.scopeDepth) {
-        emitByte(OpCode.OP_POP)
+        console.log('local variable at a higher scope depth')
+        if (current.locals[current.localCount - 1].isCaptured) {
+            emitByte(OpCode.OP_CLOSE_UPVALUE);
+        } else {
+            emitByte(OpCode.OP_POP);
+        }
         current.localCount--
     }
 }
@@ -563,14 +575,15 @@ function resolveUpvalue(compiler: Compiler, name: Token): i32 {
   
     const local: i32 = resolveLocal(<Compiler>compiler.enclosing, name);
     if (local !== -1) {
-        // console.log('adding local upvalue for ' + name.lexeme)
+        console.log('adding local upvalue for ' + name.lexeme);
+        (<Compiler>compiler.enclosing).locals[local].isCaptured = true;
         return addUpvalue(compiler, <u8>local, true);
     }
     // console.log('local not found for ' + name.lexeme + '. Searching surrounding scope')
     // recursive call to capture from further surrounding scopes
     const upvalue: i32 = resolveUpvalue(<Compiler>compiler.enclosing, name);
     if (upvalue !== -1) {
-        // console.log('adding surrounding scope upvalue for ' + name.lexeme)
+        console.log('adding surrounding scope upvalue for ' + name.lexeme);
         return addUpvalue(compiler, <u8>upvalue, false);
     }
   
@@ -712,12 +725,12 @@ function funCompile(type: FunctionType): void {
 
     // for loop means variable sized encoding (depending on upvalueCount)
     for (let i:u8 = 0; i < myFunction.upvalueCount; i++) {
-        // if (compiler.upvalues[i].isLocal) {
-        //     console.log('adding local byte')
-        // } else {
-        //     console.log('adding surrounding scope byte')
-        // }
-        // console.log('adding index byte: ' + compiler.upvalues[i].index.toString())
+        if (compiler.upvalues[i].isLocal) {
+            console.log('adding local byte')
+        } else {
+            console.log('adding surrounding scope byte')
+        }
+        console.log('adding index byte: ' + compiler.upvalues[i].index.toString())
         emitByte(compiler.upvalues[i].isLocal ? 1 : 0);
         emitByte(compiler.upvalues[i].index);
     }

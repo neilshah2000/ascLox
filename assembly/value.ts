@@ -1,4 +1,4 @@
-import { AS_AS_STRING, AS_STRING, Obj, ObjString, ObjType, OBJ_TYPE, AS_FUNCTION, printFunction, AS_CLOSURE } from './object'
+import { AS_AS_STRING, AS_STRING, Obj, ObjString, ObjType, OBJ_TYPE, AS_FUNCTION, printFunction, AS_CLOSURE, ObjClosure } from './object'
 
 export enum ValueType {
     VAL_BOOL,
@@ -81,7 +81,8 @@ function objectToString(objectValue: Value): string {
         case ObjType.OBJ_STRING:
             return AS_AS_STRING(objectValue)
         case ObjType.OBJ_CLOSURE:
-            return printFunction(AS_CLOSURE(objectValue).func)
+            const myClosure: ObjClosure = AS_CLOSURE(objectValue)
+            return printFunction(myClosure.func)
         case ObjType.OBJ_FUNCTION:
             return printFunction(AS_FUNCTION(objectValue))
         case ObjType.OBJ_NATIVE:

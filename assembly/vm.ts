@@ -38,6 +38,7 @@ export class VM {
     stackTop: i32 = 0 // points to the next empty slot in the stack
     globals: Table = new Map<ObjString, Value>()
     strings: Table = new Map<ObjString, Value>()
+    openUpvalues: ObjUpvalue | null = null // 1st in linked list of open upvalues
     objects: Obj | null = null
 }
 
@@ -60,12 +61,13 @@ import {
     NUMBER_VAL,
     OBJ_VAL,
     printValueToString,
+    valToString,
     Value,
     valuesEqual,
     ValueType,
 } from './value'
 import { compile, printTokens } from './compiler'
-import { AS_STRING, IS_STRING, OBJ_TYPE, Obj, ObjFunction, ObjString, takeString, ObjType, AS_FUNCTION, NativeFn, AS_NATIVE, copyString, ObjNative, ObjClosure, AS_CLOSURE } from './object'
+import { AS_STRING, IS_STRING, OBJ_TYPE, Obj, ObjFunction, ObjString, takeString, ObjType, AS_FUNCTION, NativeFn, AS_NATIVE, copyString, ObjNative, ObjClosure, AS_CLOSURE, ObjUpvalue, newUpvalue } from './object'
 import { freeObjects } from './memory'
 import { freeTable, initTable, Table, tableDelete, tableGet, tableSet } from './table'
 
@@ -82,12 +84,36 @@ function printObjects(): void {
     console.log()
 }
 
+function printValueStack(): void {
+    let outstr = '==== value stack ====\n'
+    for (let i = 0; i < vm.stack.length; i++) {
+        if (vm.stack[i].type !== ValueType.VAL_NIL) {
+            outstr = outstr + printValueToString(vm.stack[i]) + '\n'
+            // if closure object, print upvalues
+            if (vm.stack[i].type === ValueType.VAL_OBJ && OBJ_TYPE(vm.stack[i]) === ObjType.OBJ_CLOSURE) {
+                const myClosure: ObjClosure = AS_CLOSURE(vm.stack[i])
+                if (myClosure.upvalueCount > 0) outstr = outstr + printClosureUpvalues(myClosure)
+            }
+        }
+    }
+    console.log(outstr)
+}
+
+function printClosureUpvalues(myClosure: ObjClosure): string {
+    let cslStr = '--- closure ---\n'
+    for (let i: u32 = 0; i < myClosure.upvalueCount; i++) {
+        cslStr = cslStr + `upVal ${i.toString()}. ${valToString(myClosure.upvalues[i].locationValue)} [${myClosure.upvalues[i].locationIndex.toString()}]\n`
+    }
+    return cslStr
+}
+
 function resetStack(): void {
     vm.stackTop = 0
 
     // TODO: keep??
     vm.objects = null
     vm.frameCount = 0
+    vm.openUpvalues = null
 }
 
 function runtimeError(format: string): void {
@@ -208,7 +234,65 @@ function callValue(callee: Value, argCount: u8): bool {
     }
     runtimeError("Can only call functions and classes.");
     return false;
-  }
+}
+
+// compare local index with vm upvalue location index to simulate pointer arithmetic
+function captureUpvalue(local: Value, vmLocalIndex: i32): ObjUpvalue {
+    // check for existing upvalue before creating new one
+    let prevUpvalue: ObjUpvalue | null = null
+    let upvalue: ObjUpvalue | null = vm.openUpvalues;
+    // TODO: location is a pointer so pointer arithmetic going on here
+    // reasons to exit
+    // We found an upvalue whose local slot is below the one we’re looking for.
+    // Since the list is sorted, that means we’ve gone past the slot we are closing over,
+    // and thus there must not be an existing upvalue for it.
+    while (upvalue !== null && upvalue.locationIndex > vmLocalIndex) {
+        prevUpvalue = upvalue;
+        upvalue = upvalue.nextUpvalue;
+    }
+
+    // TODO: location is a pointer so pointer arithmetic going on here
+    if (upvalue !== null && upvalue.locationIndex === vmLocalIndex) {
+        console.log('capture upvalue found existing upvalue')
+        return upvalue;
+    }
+
+    console.log('capture upvalue creating new upvalue')
+    const createdUpvalue: ObjUpvalue = newUpvalue(local, vmLocalIndex);
+    createdUpvalue.nextUpvalue = upvalue;
+
+    if (prevUpvalue === null) {
+        vm.openUpvalues = createdUpvalue;
+    } else {
+        prevUpvalue.nextUpvalue = createdUpvalue;
+    }
+
+    return createdUpvalue;
+}
+
+// TODO: pointer arithmetic going on in c here
+// needs a pointer to a value either from the vm object or the call frame object
+// we are going to use index here instead of pointer like in cLox
+function closeUpvalues(last: i32): void {
+    // TODO: pointer arithmetic
+    // we only need the index to do the comparison
+    while (vm.openUpvalues !== null && (<ObjUpvalue>vm.openUpvalues).locationIndex >= last) {
+        const upvalue: ObjUpvalue = <ObjUpvalue>vm.openUpvalues;
+
+        // We do not need the value in the vm stack slot,
+        // because we are only moving things around internally within the upvalue
+
+        // dereference location pointer and store value directly in upvalue closed field
+        // ie move off the value stack and onto the heap
+        upvalue.closed = upvalue.locationValue;
+
+        // OP_GET_UPVALUE and OP_SET_UPVALUE instructions already look for the value
+        // by dereferecning the location pointer
+        // so we keep that and make that pointer point to the upvalues own internal closed field
+        upvalue.locationValue = <Value>upvalue.closed;
+        vm.openUpvalues = upvalue.nextUpvalue;
+    }
+}
 
 function isFalsey(value: Value): bool {
     return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value))
@@ -320,9 +404,21 @@ export function run(): InterpretResult {
                 pop()
                 break
             case OpCode.OP_GET_LOCAL: {
+                console.log('---- before local ----')
+                printValueStack()
                 const slot: u8 = READ_BYTE(frame);
+
+                // BUG HERE??
+                // value in the closure upvalue is 'assigned'
+                // but this is getting 'before' from the value stack
+                // the closure upvalue needs to point to the value stack item
+                // (or is it the value stack? no its the main stack)
+                // needs to be the same memory reference, so maybe that setup is wrong
+
                 // push(frame.slots[slot])
                 push(vm.stack[frame.slotsIndex + slot])
+                console.log('---- after local ----')
+                printValueStack()
                 break
             }
             case OpCode.OP_SET_LOCAL: {
@@ -356,6 +452,42 @@ export function run(): InterpretResult {
                     return InterpretResult.INTERPRET_RUNTIME_ERROR
                 }
                 break
+            }
+            case OpCode.OP_GET_UPVALUE: {
+                const slot: u8 = READ_BYTE(frame); // index of slot in call frame
+                const vmSlotIndex = frame.slotsIndex + slot
+                // TODO: slot or vmSlotIndex to get correct upvalue??
+                // maybe dont need it because we are getting not setting
+                const myValue = frame.closure.upvalues[slot].locationValue
+                console.log('getting upvalue: ' + printValueToString(myValue) + ' from slot ' + slot.toString())
+                console.log(`frame.slotsIndex: ${frame.slotsIndex}`)
+                console.log(`vmSlotIndex: ${vmSlotIndex}`)
+                printValueStack()
+                push(myValue);
+                break;
+            }
+            case OpCode.OP_SET_UPVALUE: {
+                const slot: u8 = READ_BYTE(frame);
+                const vmSlotIndex = frame.slotsIndex + slot
+                const myValue = peek(0);
+                printValueStack()
+                console.log('setting upvalue: ' + printValueToString(myValue) + ' from slot ' + slot.toString() + ' with old value ' + printValueToString(frame.closure.upvalues[slot].locationValue))
+                console.log(`frame.slotsIndex: ${frame.slotsIndex}`)
+                console.log(`vmSlotIndex: ${vmSlotIndex}`)
+
+                /////// IMPORTANT ////////////
+                // vmSlotIndex is the slot index of the new value
+                // NOT the slot index of the old value we are trying to replace
+                // THAT index should not change. But the value should
+                const slotIndexToChange = frame.closure.upvalues[slot].locationIndex
+                // will change the value stored in upvalue, but not affect the stack
+                // have to change it to keep upvalue in sync with stack
+                frame.closure.upvalues[slot].locationValue = myValue
+                // manually change the stack slot because our reference is not a pointer
+                vm.stack[slotIndexToChange] = myValue
+
+                printValueStack()
+                break;
             }
             case OpCode.OP_EQUAL:
                 const b: Value = pop()
@@ -455,10 +587,36 @@ export function run(): InterpretResult {
                 const myfunction: ObjFunction = AS_FUNCTION(READ_CONSTANT(frame));
                 const closure: ObjClosure = new ObjClosure(myfunction);
                 push(OBJ_VAL(closure));
+                // console.log('we walk through all of the operands after OP_CLOSURE to see what kind of upvalue each slot captures')
+                for (let i: u32 = 0; i < closure.upvalueCount; i++) {
+                    const isLocal: u8 = READ_BYTE(frame);
+                    const index: u8 = READ_BYTE(frame);
+                    if (isLocal === 1) {
+                        // console.log('closes over local variable in enclosing function')
+                        // use our implementation to get the call frame slot
+                        const localIndex = frame.slotsIndex + index
+                        const ourValue = vm.stack[localIndex]
+                        closure.upvalues[i] = captureUpvalue(ourValue, localIndex);
+                    } else {
+                        // console.log('we capture an upvalue from the surrounding function')
+                        closure.upvalues[i] = frame.closure.upvalues[index];
+                    }
+                }
+                break;
+            }
+            case OpCode.OP_CLOSE_UPVALUE: {
+                closeUpvalues(vm.stackTop - 1);
+                pop();
                 break;
             }
             case OpCode.OP_RETURN: {
                 const result: Value = pop();
+                // vm for frame index?? maybe vm
+                // This is the reason closeUpvalues() accepts a pointer to a stack slot.
+                // When a function returns, we call that same helper and pass in the first stack slot owned by the function.
+                // By passing the first slot in the function’s stack window,
+                // we close every remaining open upvalue owned by the returning function
+                closeUpvalues(frame.slotsIndex);
                 vm.frameCount--;
                 if (vm.frameCount == 0) {
                     pop();

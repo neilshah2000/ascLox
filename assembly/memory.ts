@@ -35,7 +35,7 @@ export const storeCodeString = (code: string): void => {
 export function freeObjects(): void {
     let object: Obj | null = vm.objects
     while (object !== null) {
-        const next: Obj | null = object.next
+        const next: Obj | null = object.nextObj
         // freeObject(object)
         // for now just set object to next to allow assemblyscript garbage collector to clean up
         object = next
