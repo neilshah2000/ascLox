@@ -67,7 +67,7 @@ import {
     ValueType,
 } from './value'
 import { compile, printTokens } from './compiler'
-import { AS_STRING, IS_STRING, OBJ_TYPE, Obj, ObjFunction, ObjString, takeString, ObjType, AS_FUNCTION, NativeFn, AS_NATIVE, copyString, ObjNative, ObjClosure, AS_CLOSURE, ObjUpvalue, newUpvalue } from './object'
+import { AS_STRING, IS_STRING, OBJ_TYPE, Obj, ObjFunction, ObjString, takeString, ObjType, AS_FUNCTION, NativeFn, AS_NATIVE, copyString, ObjNative, ObjClosure, AS_CLOSURE, ObjUpvalue, newUpvalue, ObjClass, ObjInstance, AS_INSTANCE, IS_INSTANCE, AS_CLASS } from './object'
 import { freeObjects } from './memory'
 import { freeTable, initTable, Table, tableDelete, tableGet, tableSet } from './table'
 
@@ -219,6 +219,12 @@ function call(closure: ObjClosure, argCount: u8): bool {
 function callValue(callee: Value, argCount: u8): bool {
     if (IS_OBJ(callee)) {
         switch (OBJ_TYPE(callee)) {
+            case ObjType.OBJ_CLASS: {
+                const klass: ObjClass = AS_CLASS(callee);
+                // TODO: check this slot is correct when translating from c to assemblyscript
+                vm.stack[vm.stackTop - argCount - 1] = OBJ_VAL(new ObjInstance(klass));
+                return true;
+            }
             case ObjType.OBJ_CLOSURE:
                 return call(AS_CLOSURE(callee), argCount);
             case ObjType.OBJ_NATIVE: {
@@ -489,6 +495,38 @@ export function run(): InterpretResult {
                 printValueStack()
                 break;
             }
+            case OpCode.OP_GET_PROPERTY: {
+                if (!IS_INSTANCE(peek(0))) {
+                    runtimeError("Only instances have properties.");
+                    return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                }
+
+                const instance: ObjInstance = AS_INSTANCE(peek(0));
+                const name: ObjString = READ_STRING(frame);
+        
+                const value: Value | null = tableGet(instance.fields, name);
+                if (value !== null) {
+                    pop(); // Instance.
+                    push(value);
+                    break;
+                }
+
+                runtimeError(`Undefined property ${name.chars}.`);
+                return InterpretResult.INTERPRET_RUNTIME_ERROR;
+            }
+            case OpCode.OP_SET_PROPERTY: {
+                if (!IS_INSTANCE(peek(1))) {
+                    runtimeError("Only instances have fields.");
+                    return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                }
+
+                const instance: ObjInstance = AS_INSTANCE(peek(1));
+                tableSet(instance.fields, READ_STRING(frame), peek(0));
+                const value: Value = pop();
+                pop();
+                push(value);
+                break;
+            }
             case OpCode.OP_EQUAL:
                 const b: Value = pop()
                 const a: Value = pop()
@@ -626,6 +664,10 @@ export function run(): InterpretResult {
                 vm.stackTop = frame.slotsIndex;
                 push(result);
                 frame = vm.frames[vm.frameCount - 1];
+                break;
+            }
+            case OpCode.OP_CLASS: {
+                push(OBJ_VAL(new ObjClass(READ_STRING(frame))));
                 break;
             }
         }

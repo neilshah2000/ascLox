@@ -1,11 +1,13 @@
-import { tableFindString, tableSet } from './table'
+import { Table, initTable, tableFindString, tableSet } from './table'
 import { AS_OBJ, IS_OBJ, NIL_VAL, Value } from './value'
 import { vm } from './vm'
 import { Chunk } from './chunk'
 
 export enum ObjType {
+    OBJ_CLASS,
     OBJ_CLOSURE,
     OBJ_FUNCTION,
+    OBJ_INSTANCE,
     OBJ_NATIVE,
     OBJ_STRING,
     OBJ_UPVALUE
@@ -87,9 +89,35 @@ export class ObjClosure extends Obj {
     }
 }
 
+export class ObjClass extends Obj{
+    name: string = '';
+
+    constructor(name: ObjString) {
+        super();
+        this.type = ObjType.OBJ_CLASS
+        this.name = name.chars
+    }
+};
+
+export class ObjInstance extends Obj {
+    klass: ObjClass
+    fields: Table
+
+    constructor(myKlass: ObjClass) {
+        super()
+        this.type = ObjType.OBJ_INSTANCE
+        this.klass = myKlass
+        this.fields = initTable()
+    }
+};
+
 // returns the type of object from the value
 export function OBJ_TYPE(value: Value): ObjType {
     return AS_OBJ(value).type
+}
+
+export function IS_CLASS(value: Value): bool {
+    return isObjectType(value, ObjType.OBJ_CLASS)
 }
 
 export function IS_CLOSURE(value: Value): bool {
@@ -100,12 +128,21 @@ export function IS_FUNCTION(value: Value): bool {
     return isObjectType(value, ObjType.OBJ_FUNCTION)
 }
 
+export function IS_INSTANCE(value: Value): bool {
+    return isObjectType(value, ObjType.OBJ_INSTANCE)
+}
+
 export function IS_NATIVE(value: Value): bool {
     return isObjectType(value, ObjType.OBJ_NATIVE)
 }
 
 export function IS_STRING(value: Value): bool {
     return isObjectType(value, ObjType.OBJ_STRING)
+}
+
+// returns ObjClass
+export function AS_CLASS(value: Value): ObjClass {
+    return <ObjClass>AS_OBJ(value)
 }
 
 // returns ObjClosure
@@ -116,6 +153,11 @@ export function AS_CLOSURE(value: Value): ObjClosure {
 // returns ObjFunction
 export function AS_FUNCTION(value: Value): ObjFunction {
     return <ObjFunction>AS_OBJ(value)
+}
+
+// returns ObjInstance
+export function AS_INSTANCE(value: Value): ObjInstance {
+    return <ObjInstance>AS_OBJ(value)
 }
 
 // returns ObjFunction

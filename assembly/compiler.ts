@@ -356,7 +356,18 @@ function call(canAssign: bool): void {
     const argCount: u8 = argumentList();
     emitBytes(OpCode.OP_CALL, argCount);
 }
+ 
+function dot(canAssign: bool): void {
+    consume(TokenType.TOKEN_IDENTIFIER, "Expect property name after '.'.");
+    const name: u8 = identifierConstant(parser.previous);
   
+    if (canAssign && match(TokenType.TOKEN_EQUAL)) {
+      expression();
+      emitBytes(OpCode.OP_SET_PROPERTY, name);
+    } else {
+      emitBytes(OpCode.OP_GET_PROPERTY, name);
+    }
+}
 
 function literal(canAssign: bool): void {
     switch (parser.previous.type) {
@@ -463,7 +474,7 @@ rules[TokenType.TOKEN_RIGHT_PAREN] = new ParseRule(null, null, Precedence.PREC_N
 rules[TokenType.TOKEN_LEFT_BRACE] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_RIGHT_BRACE] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_COMMA] = new ParseRule(null, null, Precedence.PREC_NONE)
-rules[TokenType.TOKEN_DOT] = new ParseRule(null, null, Precedence.PREC_CALL)
+rules[TokenType.TOKEN_DOT] = new ParseRule(null, dot, Precedence.PREC_CALL)
 rules[TokenType.TOKEN_MINUS] = new ParseRule(unary, binary, Precedence.PREC_TERM)
 rules[TokenType.TOKEN_PLUS] = new ParseRule(null, binary, Precedence.PREC_TERM)
 rules[TokenType.TOKEN_SEMICOLON] = new ParseRule(null, null, Precedence.PREC_NONE)
@@ -736,6 +747,18 @@ function funCompile(type: FunctionType): void {
     }
 }
 
+function classDeclaration(): void {
+    consume(TokenType.TOKEN_IDENTIFIER, "Expect class name.");
+    const nameConstant: u8 = identifierConstant(parser.previous);
+    declareVariable();
+  
+    emitBytes(OpCode.OP_CLASS, nameConstant);
+    defineVariable(nameConstant);
+  
+    consume(TokenType.TOKEN_LEFT_BRACE, "Expect '{' before class body.");
+    consume(TokenType.TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
+}
+
 function funDeclaration(): void {
     const global: u8 = parseVariable("Expect function name.")
     markInitialized()
@@ -886,7 +909,10 @@ function synchronize(): void {
 }
 
 function declaration(): void {
-    if (match(TokenType.TOKEN_FUN)) {
+    if (match(TokenType.TOKEN_CLASS)) {
+        classDeclaration();
+    }
+    else if (match(TokenType.TOKEN_FUN)) {
         funDeclaration()
     }
     else if (match(TokenType.TOKEN_VAR)) {

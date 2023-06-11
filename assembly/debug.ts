@@ -78,6 +78,12 @@ export const disassembleInstruction = (chunk: Chunk, offset: u32): u32 => {
         case OpCode.OP_SET_UPVALUE: {
             return byteInstruction(`${info} OP_SET_UPVALUE`, chunk, offset);
         }
+        case OpCode.OP_GET_PROPERTY: {
+            return constantInstruction(`${info} OP_GET_PROPERTY`, chunk, offset)
+        }
+        case OpCode.OP_SET_PROPERTY: {
+            return constantInstruction(`${info} OP_SET_PROPERTY`, chunk, offset)
+        }
         case OpCode.OP_EQUAL: {
             return simpleInstruction(`${info} OP_EQUAL`, offset)
         }
@@ -148,6 +154,9 @@ export const disassembleInstruction = (chunk: Chunk, offset: u32): u32 => {
         }
         case OpCode.OP_RETURN: {
             return simpleInstruction(`${info} OP_RETURN`, offset)
+        }
+        case OpCode.OP_CLASS: {
+            return constantInstruction(`${info} OP_CLASS`, chunk, offset)
         }
         default: {
             console.log(`${offset} Unknown opcode ${instruction}`)
