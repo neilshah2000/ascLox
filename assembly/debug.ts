@@ -28,6 +28,14 @@ const constantInstruction = (name: string, chunk: Chunk, offset: u32): u32 => {
     return offset + 2
 }
 
+function invokeInstruction(name: string, chunk: Chunk, offset: u32): u32 {
+    const constant: u8 = chunk.code[offset + 1]
+    const argCount: u8 = chunk.code[offset + 2]
+    const valueToString: string = printValueToString(chunk.constants.values[constant])
+    console.log(`${name} \t\t\t${argCount} \t\t\t\t\t${constant} \t\t\t\t\t'${valueToString}'`)
+    return offset + 3
+}
+
 export const disassembleInstruction = (chunk: Chunk, offset: u32): u32 => {
     // offset of the instruction - number of bytes from the beginning of the chunk
     // line number, or | if the line number is same as previous
@@ -126,6 +134,9 @@ export const disassembleInstruction = (chunk: Chunk, offset: u32): u32 => {
         case OpCode.OP_CALL: {
             return byteInstruction(`${info} OP_CALL`, chunk, offset)
         }
+        case OpCode.OP_INVOKE: {
+            return invokeInstruction(`${info} OP_INVOKE`, chunk, offset);
+        }
         case OpCode.OP_CLOSURE: {
             offset++;
             const constant: u8 = chunk.code[offset++];
@@ -157,6 +168,9 @@ export const disassembleInstruction = (chunk: Chunk, offset: u32): u32 => {
         }
         case OpCode.OP_CLASS: {
             return constantInstruction(`${info} OP_CLASS`, chunk, offset)
+        }
+        case OpCode.OP_METHOD: {
+            return constantInstruction(`${info} OP_METHOD`, chunk, offset)
         }
         default: {
             console.log(`${offset} Unknown opcode ${instruction}`)

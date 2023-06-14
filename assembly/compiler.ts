@@ -53,6 +53,8 @@ class Upvalue {
 
 enum FunctionType {
     TYPE_FUNCTION,
+    TYPE_INITIALIZER,
+    TYPE_METHOD,
     TYPE_SCRIPT
 }
 
@@ -70,9 +72,17 @@ class Compiler {
     scopeDepth: i32 = 0
 }
 
+class ClassCompiler {
+    enclosing: ClassCompiler | null
+    constructor() {
+        this.enclosing = null
+    }
+}
+
 // global variable. TODO: use @global decorator??
 let parser: Parser = new Parser()
 let current: Compiler = new Compiler()
+let currentClass: (ClassCompiler | null) = null;
 
 function currentChunk(): Chunk {
     return current.function.chunk
@@ -204,7 +214,13 @@ function emitLoop(loopStart: i32): void {
 }
 
 function emitReturn(): void {
-    emitByte(OpCode.OP_NIL);
+    if (current.type == FunctionType.TYPE_INITIALIZER) {
+        // In an initializer, instead of pushing nil onto the stack before returning,
+        // we load slot zero, which contains the instance
+        emitBytes(OpCode.OP_GET_LOCAL, 0);
+    } else {
+        emitByte(OpCode.OP_NIL);
+    }
     emitByte(OpCode.OP_RETURN)
 }
 
@@ -268,7 +284,12 @@ function initCompiler(compiler: Compiler, type: FunctionType): void {
     // stack slot 0 for the VM'c own internal use. function name will be '' here
     local.depth = 0
     local.isCaptured = false
-    local.name.lexeme = ''
+
+    if (type != FunctionType.TYPE_FUNCTION) {
+        local.name.lexeme = "this";
+    } else {
+        local.name.lexeme = "";
+    }
 }
 
 function endCompiler(): ObjFunction {
@@ -364,7 +385,11 @@ function dot(canAssign: bool): void {
     if (canAssign && match(TokenType.TOKEN_EQUAL)) {
       expression();
       emitBytes(OpCode.OP_SET_PROPERTY, name);
-    } else {
+    } else if (match(TokenType.TOKEN_LEFT_PAREN)) {
+        const argCount: u8 = argumentList();
+        emitBytes(OpCode.OP_INVOKE, name);
+        emitByte(argCount);
+    }  else {
       emitBytes(OpCode.OP_GET_PROPERTY, name);
     }
 }
@@ -449,6 +474,15 @@ function variable(canAssign: bool): void {
     namedVariable(parser.previous, canAssign)
 }
 
+function this_(canAssign: bool): void {
+    if (currentClass === null) {
+        error("Can't use 'this' outside of a class.");
+        return;
+    }
+
+    variable(false);
+}
+
 function unary(canAssign: bool): void {
     const operatorType: TokenType = parser.previous.type
 
@@ -503,7 +537,7 @@ rules[TokenType.TOKEN_OR] = new ParseRule(null, or_, Precedence.PREC_OR)
 rules[TokenType.TOKEN_PRINT] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_RETURN] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_SUPER] = new ParseRule(null, null, Precedence.PREC_NONE)
-rules[TokenType.TOKEN_THIS] = new ParseRule(null, null, Precedence.PREC_NONE)
+rules[TokenType.TOKEN_THIS] = new ParseRule(this_, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_TRUE] = new ParseRule(literal, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_VAR] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_WHILE] = new ParseRule(null, null, Precedence.PREC_NONE)
@@ -747,16 +781,45 @@ function funCompile(type: FunctionType): void {
     }
 }
 
+function method(): void {
+    consume(TokenType.TOKEN_IDENTIFIER, "Expect method name.");
+    const constant: u8 = identifierConstant(parser.previous);
+
+    let type: FunctionType = FunctionType.TYPE_METHOD;
+    if (parser.previous.lexeme === "init") {
+        type = FunctionType.TYPE_INITIALIZER;
+    }
+    // That utility function compiles the subsequent parameter list and function body.
+    // Then it emits the code to create an ObjClosure and leave it on top of the stack.
+    // At runtime, the VM will find the closure there.
+    funCompile(type);
+    emitBytes(OpCode.OP_METHOD, constant);
+}
+
 function classDeclaration(): void {
     consume(TokenType.TOKEN_IDENTIFIER, "Expect class name.");
+    const className: Token = parser.previous;
     const nameConstant: u8 = identifierConstant(parser.previous);
     declareVariable();
   
     emitBytes(OpCode.OP_CLASS, nameConstant);
     defineVariable(nameConstant);
+
+    const classCompiler: ClassCompiler = new ClassCompiler()
+    classCompiler.enclosing = currentClass;
+    currentClass = classCompiler;
   
+    //  helper function generates code to load a variable with the given name onto the stack.
+    namedVariable(className, false);
     consume(TokenType.TOKEN_LEFT_BRACE, "Expect '{' before class body.");
+    while (!check(TokenType.TOKEN_RIGHT_BRACE) && !check(TokenType.TOKEN_EOF)) {
+        method();
+    }
     consume(TokenType.TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
+    // Once we’ve reached the end of the methods, we no longer need the class and tell the VM to pop it off the stack.
+    emitByte(OpCode.OP_POP);
+
+    currentClass = (<ClassCompiler>currentClass).enclosing;
 }
 
 function funDeclaration(): void {
@@ -861,11 +924,14 @@ function returnStatement(): void {
     }
 
     if (match(TokenType.TOKEN_SEMICOLON)) {
-      emitReturn();
+        emitReturn();
     } else {
-      expression();
-      consume(TokenType.TOKEN_SEMICOLON, "Expect ';' after return value.");
-      emitByte(OpCode.OP_RETURN);
+        if (current.type === FunctionType.TYPE_INITIALIZER) {
+            error("Can't return a value from an initializer.");
+        }
+        expression();
+        consume(TokenType.TOKEN_SEMICOLON, "Expect ';' after return value.");
+        emitByte(OpCode.OP_RETURN);
     }
 }
 

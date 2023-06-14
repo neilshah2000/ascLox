@@ -1,4 +1,4 @@
-import { AS_AS_STRING, AS_STRING, Obj, ObjString, ObjType, OBJ_TYPE, AS_FUNCTION, printFunction, AS_CLOSURE, ObjClosure, AS_CLASS, AS_INSTANCE } from './object'
+import { AS_AS_STRING, AS_STRING, Obj, ObjString, ObjType, OBJ_TYPE, AS_FUNCTION, printFunction, AS_CLOSURE, ObjClosure, AS_CLASS, AS_INSTANCE, AS_BOUND_METHOD } from './object'
 
 export enum ValueType {
     VAL_BOOL,
@@ -78,6 +78,8 @@ export function IS_OBJ(value: Value): bool {
 
 function objectToString(objectValue: Value): string {
     switch (OBJ_TYPE(objectValue)) {
+        case ObjType.OBJ_BOUND_METHOD:
+            return printFunction(AS_BOUND_METHOD(objectValue).method.func)
         case ObjType.OBJ_CLASS:
             return AS_CLASS(objectValue).name
         case ObjType.OBJ_INSTANCE:

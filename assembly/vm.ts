@@ -38,6 +38,7 @@ export class VM {
     stackTop: i32 = 0 // points to the next empty slot in the stack
     globals: Table = new Map<ObjString, Value>()
     strings: Table = new Map<ObjString, Value>()
+    initString: ObjString = new ObjString()
     openUpvalues: ObjUpvalue | null = null // 1st in linked list of open upvalues
     objects: Obj | null = null
 }
@@ -67,7 +68,7 @@ import {
     ValueType,
 } from './value'
 import { compile, printTokens } from './compiler'
-import { AS_STRING, IS_STRING, OBJ_TYPE, Obj, ObjFunction, ObjString, takeString, ObjType, AS_FUNCTION, NativeFn, AS_NATIVE, copyString, ObjNative, ObjClosure, AS_CLOSURE, ObjUpvalue, newUpvalue, ObjClass, ObjInstance, AS_INSTANCE, IS_INSTANCE, AS_CLASS } from './object'
+import { AS_STRING, IS_STRING, OBJ_TYPE, Obj, ObjFunction, ObjString, takeString, ObjType, AS_FUNCTION, NativeFn, AS_NATIVE, copyString, ObjNative, ObjClosure, AS_CLOSURE, ObjUpvalue, newUpvalue, ObjClass, ObjInstance, AS_INSTANCE, IS_INSTANCE, AS_CLASS, ObjBoundMethod, AS_BOUND_METHOD } from './object'
 import { freeObjects } from './memory'
 import { freeTable, initTable, Table, tableDelete, tableGet, tableSet } from './table'
 
@@ -153,6 +154,7 @@ export function initVM(): void {
 
     vm.globals = initTable()
     vm.strings = initTable()
+    vm.initString = copyString("init")
 
     defineNative("clock", clockNative);
 }
@@ -219,10 +221,23 @@ function call(closure: ObjClosure, argCount: u8): bool {
 function callValue(callee: Value, argCount: u8): bool {
     if (IS_OBJ(callee)) {
         switch (OBJ_TYPE(callee)) {
+            case ObjType.OBJ_BOUND_METHOD: {
+                const bound: ObjBoundMethod = AS_BOUND_METHOD(callee);
+                vm.stack[vm.stackTop - argCount - 1] = bound.receiver;
+                return call(bound.method, argCount);
+            }
             case ObjType.OBJ_CLASS: {
                 const klass: ObjClass = AS_CLASS(callee);
                 // TODO: check this slot is correct when translating from c to assemblyscript
                 vm.stack[vm.stackTop - argCount - 1] = OBJ_VAL(new ObjInstance(klass));
+                const initializer: Value | null = tableGet(klass.methods, vm.initString)
+                if (initializer !== null) {
+                    return call(AS_CLOSURE(initializer), argCount);
+                } else if (argCount != 0) {
+                    runtimeError(`Expected 0 arguments but got ${argCount}.`);
+                    return false;
+                }
+          
                 return true;
             }
             case ObjType.OBJ_CLOSURE:
@@ -240,6 +255,50 @@ function callValue(callee: Value, argCount: u8): bool {
     }
     runtimeError("Can only call functions and classes.");
     return false;
+}
+
+function invokeFromClass(klass: ObjClass, name: ObjString, argCount: u8): bool {
+    const method: Value | null = tableGet(klass.methods, name)
+    if (method === null) {
+        runtimeError(`Undefined property '${name.chars}'.`);
+        return false;
+    }
+    return call(AS_CLOSURE(method), argCount);
+}
+
+function invoke(name: ObjString, argCount: u8): bool {
+    const receiver: Value = peek(argCount);
+
+    if (!IS_INSTANCE(receiver)) {
+        runtimeError("Only instances have methods.");
+        return false;
+    }
+
+    const instance: ObjInstance = AS_INSTANCE(receiver);
+
+    const value: Value | null = tableGet(instance.fields, name)
+    if (value !== null) {
+        vm.stack[vm.stackTop - argCount - 1] = value
+        return callValue(value, argCount);
+    }
+
+    return invokeFromClass(instance.klass, name, argCount);
+}
+
+// If this function finds a method, it places the method on the stack and returns true.
+// Otherwise it returns false to indicate a method with that name couldn’t be found.
+// Since the name also wasn’t a field, that means we have a runtime error, which aborts the interpreter.
+function bindMethod(klass: ObjClass, name: ObjString): bool {
+    const method: Value | null = tableGet(klass.methods, name)
+    if (method === null) {
+      runtimeError(`Undefined property '${name.chars}'.`);
+      return false;
+    }
+  
+    const bound: ObjBoundMethod = new ObjBoundMethod(peek(0), AS_CLOSURE(method));
+    pop();
+    push(OBJ_VAL(bound));
+    return true;
 }
 
 // compare local index with vm upvalue location index to simulate pointer arithmetic
@@ -298,6 +357,17 @@ function closeUpvalues(last: i32): void {
         upvalue.locationValue = <Value>upvalue.closed;
         vm.openUpvalues = upvalue.nextUpvalue;
     }
+}
+
+// The method closure is on top of the stack,
+// above the class it will be bound to.
+// We read those two stack slots and store the closure in the class’s method table.
+// Then we pop the closure since we’re done with it.
+function defineMethod(name: ObjString): void {
+    const method: Value = peek(0);
+    const klass: ObjClass = AS_CLASS(peek(1));
+    tableSet(klass.methods, name, method);
+    pop();
 }
 
 function isFalsey(value: Value): bool {
@@ -511,8 +581,10 @@ export function run(): InterpretResult {
                     break;
                 }
 
-                runtimeError(`Undefined property ${name.chars}.`);
-                return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                if (!bindMethod(instance.klass, name)) {
+                    return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                }
+                break;
             }
             case OpCode.OP_SET_PROPERTY: {
                 if (!IS_INSTANCE(peek(1))) {
@@ -621,6 +693,16 @@ export function run(): InterpretResult {
                 frame = vm.frames[vm.frameCount - 1]
                 break;
             }
+            case OpCode.OP_INVOKE: {
+                const method: ObjString = READ_STRING(frame);
+                const argCount: u8 = READ_BYTE(frame);
+                if (!invoke(method, argCount)) {
+                    return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                }
+                // invoke calls call() function which generates a new call frame
+                frame = vm.frames[vm.frameCount - 1]
+                break;
+            }
             case OpCode.OP_CLOSURE: {
                 const myfunction: ObjFunction = AS_FUNCTION(READ_CONSTANT(frame));
                 const closure: ObjClosure = new ObjClosure(myfunction);
@@ -668,6 +750,10 @@ export function run(): InterpretResult {
             }
             case OpCode.OP_CLASS: {
                 push(OBJ_VAL(new ObjClass(READ_STRING(frame))));
+                break;
+            }
+            case OpCode.OP_METHOD: {
+                defineMethod(READ_STRING(frame));
                 break;
             }
         }

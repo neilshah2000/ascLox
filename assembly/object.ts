@@ -4,6 +4,7 @@ import { vm } from './vm'
 import { Chunk } from './chunk'
 
 export enum ObjType {
+    OBJ_BOUND_METHOD,
     OBJ_CLASS,
     OBJ_CLOSURE,
     OBJ_FUNCTION,
@@ -91,11 +92,13 @@ export class ObjClosure extends Obj {
 
 export class ObjClass extends Obj{
     name: string = '';
+    methods: Table
 
     constructor(name: ObjString) {
         super();
         this.type = ObjType.OBJ_CLASS
         this.name = name.chars
+        this.methods = initTable()
     }
 };
 
@@ -111,9 +114,25 @@ export class ObjInstance extends Obj {
     }
 };
 
+export class ObjBoundMethod extends Obj{
+    receiver: Value
+    method: ObjClosure;
+
+    constructor(receiver: Value, method: ObjClosure) {
+        super()
+        this.type = ObjType.OBJ_BOUND_METHOD
+        this.receiver = receiver
+        this.method = method
+    }
+} ;
+
 // returns the type of object from the value
 export function OBJ_TYPE(value: Value): ObjType {
     return AS_OBJ(value).type
+}
+
+export function IS_BOUND_METHOD(value: Value): bool {
+    return isObjectType(value, ObjType.OBJ_BOUND_METHOD)
 }
 
 export function IS_CLASS(value: Value): bool {
@@ -138,6 +157,11 @@ export function IS_NATIVE(value: Value): bool {
 
 export function IS_STRING(value: Value): bool {
     return isObjectType(value, ObjType.OBJ_STRING)
+}
+
+// returns ObjBoundMethod
+export function AS_BOUND_METHOD(value: Value): ObjBoundMethod {
+    return <ObjBoundMethod>AS_OBJ(value)
 }
 
 // returns ObjClass
