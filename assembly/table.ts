@@ -42,7 +42,13 @@ export function tableDelete(map: Table, key: ObjString): bool {
     }
 }
 
-function tableAddAll(map: Table): void {}
+// copy entries from one table to another
+export function tableAddAll(from: Table, to: Table): void {
+    const keys: ObjString[] = from.keys()
+    for (let i = 0; i < keys.length; i++) {
+        tableSet(to, keys[i], from.get(keys[i]))
+    }
+}
 
 // This should return the key, not the value. Value is set as nil so cant cast to string
 // returns null if the string is not a key

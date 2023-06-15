@@ -68,9 +68,9 @@ import {
     ValueType,
 } from './value'
 import { compile, printTokens } from './compiler'
-import { AS_STRING, IS_STRING, OBJ_TYPE, Obj, ObjFunction, ObjString, takeString, ObjType, AS_FUNCTION, NativeFn, AS_NATIVE, copyString, ObjNative, ObjClosure, AS_CLOSURE, ObjUpvalue, newUpvalue, ObjClass, ObjInstance, AS_INSTANCE, IS_INSTANCE, AS_CLASS, ObjBoundMethod, AS_BOUND_METHOD } from './object'
+import { AS_STRING, IS_STRING, OBJ_TYPE, Obj, ObjFunction, ObjString, takeString, ObjType, AS_FUNCTION, NativeFn, AS_NATIVE, copyString, ObjNative, ObjClosure, AS_CLOSURE, ObjUpvalue, newUpvalue, ObjClass, ObjInstance, AS_INSTANCE, IS_INSTANCE, AS_CLASS, ObjBoundMethod, AS_BOUND_METHOD, IS_CLASS } from './object'
 import { freeObjects } from './memory'
-import { freeTable, initTable, Table, tableDelete, tableGet, tableSet } from './table'
+import { freeTable, initTable, Table, tableAddAll, tableDelete, tableGet, tableSet } from './table'
 
 export enum InterpretResult {
     INTERPRET_OK,
@@ -604,6 +604,15 @@ export function run(): InterpretResult {
                 const a: Value = pop()
                 push(BOOL_VAL(valuesEqual(a, b)))
                 break
+            case OpCode.OP_GET_SUPER: {
+                const name: ObjString = READ_STRING(frame);
+                const superclass: ObjClass = AS_CLASS(pop());
+        
+                if (!bindMethod(superclass, name)) {
+                    return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
             case OpCode.OP_GREATER: {
                 const status = BINARY_BOOL_OP((a, b) => a > b)
                 if (status == InterpretResult.INTERPRET_COMPILE_ERROR) {
@@ -703,6 +712,16 @@ export function run(): InterpretResult {
                 frame = vm.frames[vm.frameCount - 1]
                 break;
             }
+            case OpCode.OP_SUPER_INVOKE: {
+                const method: ObjString = READ_STRING(frame);
+                const argCount: u8 = READ_BYTE(frame);
+                const superclass: ObjClass = AS_CLASS(pop());
+                if (!invokeFromClass(superclass, method, argCount)) {
+                  return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                }
+                frame = vm.frames[vm.frameCount - 1];
+                break;
+            }
             case OpCode.OP_CLOSURE: {
                 const myfunction: ObjFunction = AS_FUNCTION(READ_CONSTANT(frame));
                 const closure: ObjClosure = new ObjClosure(myfunction);
@@ -750,6 +769,18 @@ export function run(): InterpretResult {
             }
             case OpCode.OP_CLASS: {
                 push(OBJ_VAL(new ObjClass(READ_STRING(frame))));
+                break;
+            }
+            case OpCode.OP_INHERIT: {
+                const superclass: Value = peek(1);
+                if (!IS_CLASS(superclass)) {
+                    runtimeError("Superclass must be a class.");
+                    return InterpretResult.INTERPRET_RUNTIME_ERROR;
+                }
+
+                const subclass: ObjClass = AS_CLASS(peek(0));
+                tableAddAll(AS_CLASS(superclass).methods, subclass.methods);
+                pop(); // Subclass.
                 break;
             }
             case OpCode.OP_METHOD: {

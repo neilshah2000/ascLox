@@ -74,6 +74,7 @@ class Compiler {
 
 class ClassCompiler {
     enclosing: ClassCompiler | null
+    hasSuperclass: bool = false
     constructor() {
         this.enclosing = null
     }
@@ -474,6 +475,36 @@ function variable(canAssign: bool): void {
     namedVariable(parser.previous, canAssign)
 }
 
+function syntheticToken(text: string): Token {
+    const token: Token = new Token()
+    // TODO?? is token.type needed?
+    token.lexeme = text;
+    return token;
+}
+
+function super_(canAssign: bool): void {
+    if (currentClass === null) {
+        error("Can't use 'super' outside of a class.");
+    } else if (!(<ClassCompiler>currentClass).hasSuperclass) {
+        error("Can't use 'super' in a class with no superclass.");
+    }
+
+    consume(TokenType.TOKEN_DOT, "Expect '.' after 'super'.");
+    consume(TokenType.TOKEN_IDENTIFIER, "Expect superclass method name.");
+    const name: u8 = identifierConstant(parser.previous);
+
+    namedVariable(syntheticToken("this"), false);
+    if (match(TokenType.TOKEN_LEFT_PAREN)) {
+        const argCount: u8 = argumentList();
+        namedVariable(syntheticToken("super"), false);
+        emitBytes(OpCode.OP_SUPER_INVOKE, name);
+        emitByte(argCount);
+    } else {
+        namedVariable(syntheticToken("super"), false);
+        emitBytes(OpCode.OP_GET_SUPER, name);
+    }
+}
+
 function this_(canAssign: bool): void {
     if (currentClass === null) {
         error("Can't use 'this' outside of a class.");
@@ -536,7 +567,7 @@ rules[TokenType.TOKEN_NIL] = new ParseRule(literal, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_OR] = new ParseRule(null, or_, Precedence.PREC_OR)
 rules[TokenType.TOKEN_PRINT] = new ParseRule(null, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_RETURN] = new ParseRule(null, null, Precedence.PREC_NONE)
-rules[TokenType.TOKEN_SUPER] = new ParseRule(null, null, Precedence.PREC_NONE)
+rules[TokenType.TOKEN_SUPER] = new ParseRule(super_, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_THIS] = new ParseRule(this_, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_TRUE] = new ParseRule(literal, null, Precedence.PREC_NONE)
 rules[TokenType.TOKEN_VAR] = new ParseRule(null, null, Precedence.PREC_NONE)
@@ -808,6 +839,25 @@ function classDeclaration(): void {
     const classCompiler: ClassCompiler = new ClassCompiler()
     classCompiler.enclosing = currentClass;
     currentClass = classCompiler;
+
+    if (match(TokenType.TOKEN_LESS)) {
+        consume(TokenType.TOKEN_IDENTIFIER, "Expect superclass name.");
+        // treats it as a variable reference, and emits code to load the variable’s value.
+        // In other words, it looks up the superclass by name and pushes it onto the stack
+        variable(false);
+
+        if (identifiersEqual(className, parser.previous)) {
+            error("A class can't inherit from itself.");
+        }
+
+        beginScope();
+        addLocal(syntheticToken("super"));
+        defineVariable(0);
+
+        namedVariable(className, false);
+        emitByte(OpCode.OP_INHERIT);
+        classCompiler.hasSuperclass = true;
+    }
   
     //  helper function generates code to load a variable with the given name onto the stack.
     namedVariable(className, false);
@@ -818,6 +868,10 @@ function classDeclaration(): void {
     consume(TokenType.TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
     // Once we’ve reached the end of the methods, we no longer need the class and tell the VM to pop it off the stack.
     emitByte(OpCode.OP_POP);
+
+    if (classCompiler.hasSuperclass) {
+        endScope();
+    }
 
     currentClass = (<ClassCompiler>currentClass).enclosing;
 }

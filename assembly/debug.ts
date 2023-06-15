@@ -92,6 +92,9 @@ export const disassembleInstruction = (chunk: Chunk, offset: u32): u32 => {
         case OpCode.OP_SET_PROPERTY: {
             return constantInstruction(`${info} OP_SET_PROPERTY`, chunk, offset)
         }
+        case OpCode.OP_GET_SUPER: {
+            return constantInstruction(`${info} OP_GET_SUPER`, chunk, offset)
+        }
         case OpCode.OP_EQUAL: {
             return simpleInstruction(`${info} OP_EQUAL`, offset)
         }
@@ -137,6 +140,9 @@ export const disassembleInstruction = (chunk: Chunk, offset: u32): u32 => {
         case OpCode.OP_INVOKE: {
             return invokeInstruction(`${info} OP_INVOKE`, chunk, offset);
         }
+        case OpCode.OP_SUPER_INVOKE: {
+            return invokeInstruction(`${info} OP_SUPER_INVOKE`, chunk, offset);
+        }
         case OpCode.OP_CLOSURE: {
             offset++;
             const constant: u8 = chunk.code[offset++];
@@ -168,6 +174,9 @@ export const disassembleInstruction = (chunk: Chunk, offset: u32): u32 => {
         }
         case OpCode.OP_CLASS: {
             return constantInstruction(`${info} OP_CLASS`, chunk, offset)
+        }
+        case OpCode.OP_INHERIT: {
+            return simpleInstruction(`${info} OP_INHERIT`, offset);
         }
         case OpCode.OP_METHOD: {
             return constantInstruction(`${info} OP_METHOD`, chunk, offset)
