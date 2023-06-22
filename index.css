@@ -1,0 +1,22 @@
+body {
+    font-size: 20px;
+    height: 100vh;
+}
+
+#scriptz {
+    margin-bottom: 10px;
+}
+
+#editor {
+    border: 1px solid #ccc;
+    
+}
+
+.codeflask {
+    /* position: relative !important; */
+}
+
+.io-container {
+    display: flex;
+    height: 100%;
+}

@@ -71,6 +71,7 @@ import { compile, printTokens } from './compiler'
 import { AS_STRING, IS_STRING, OBJ_TYPE, Obj, ObjFunction, ObjString, takeString, ObjType, AS_FUNCTION, NativeFn, AS_NATIVE, copyString, ObjNative, ObjClosure, AS_CLOSURE, ObjUpvalue, newUpvalue, ObjClass, ObjInstance, AS_INSTANCE, IS_INSTANCE, AS_CLASS, ObjBoundMethod, AS_BOUND_METHOD, IS_CLASS } from './object'
 import { freeObjects } from './memory'
 import { freeTable, initTable, Table, tableAddAll, tableDelete, tableGet, tableSet } from './table'
+import { printout } from '.'
 
 export enum InterpretResult {
     INTERPRET_OK,
@@ -135,6 +136,8 @@ function runtimeError(format: string): void {
         errorStr = errorStr + fnName
     }
 
+    printout('RUNTIME ERROR')
+    printout(errorStr)
     console.log(errorStr)
     resetStack()
 }
@@ -672,7 +675,9 @@ export function run(): InterpretResult {
                 push(NUMBER_VAL(-AS_NUMBER(pop())))
                 break
             case OpCode.OP_PRINT: {
-                console.log(printValueToString(pop()))
+                const output = printValueToString(pop())
+                printout(output)
+                console.log(output)
                 break
             }
             case OpCode.OP_JUMP: {

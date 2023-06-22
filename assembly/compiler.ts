@@ -3,6 +3,7 @@ import { Chunk, OpCode } from './chunk'
 import { NUMBER_VAL, OBJ_VAL, Value } from './value'
 import { disassembleChunk } from './debug'
 import { copyString, ObjFunction } from './object'
+import { printout } from '.'
 
 class Parser {
     current: Token = new Token()
@@ -103,6 +104,8 @@ function errorAt(token: Token, message: string): void {
         errorStr = errorStr + ` at ${token.lexeme}`
     }
 
+    printout('COMPILE ERROR')
+    printout(`${errorStr}: ${message}`)
     console.log(`${errorStr}: ${message}`)
     parser.hadError = true
 }
