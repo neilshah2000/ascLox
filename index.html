@@ -16,13 +16,17 @@
                 'testfile13.lox', 'testfile20.lox', 'testfile28.lox', 'testfile34b.lox', 'testfile39.lox', 'testfile46.lox', 'testfile53.lox',
                 'testfile14.lox', 'testfile21.lox', 'testfile29.lox', 'testfile34c.lox', 'testfile4.lox', 'testfile47.lox', 'testfile6.lox',
                 'testfile15.lox', 'testfile22.lox', 'testfile3.lox', 'testfile34d.lox', 'testfile40.lox', 'testfile48.lox', 'testfile7.lox']
-
+            
+                
             const select = document.getElementById('scriptz');
             select.addEventListener('change', fileSelected)
 
             const debug = document.getElementById('debug');
             debug.addEventListener('change', toggleDebug)
-            
+
+            const run = document.getElementById('run');
+            run.addEventListener('click', runCode)
+
             testFileNames.forEach((name) => {
                 var opt = document.createElement('option');
                 opt.value = name;
@@ -32,20 +36,24 @@
 
             async function fileSelected(event) {
                 const content = document.querySelector('.content')
-                const vmoutput = document.querySelector('.vmoutput')
                 const fileName = event.target.value
                 const response = await fetch(`/tests/${fileName}`)
                 const scriptCode = await response.text()
-                console.clear()
                 flask.updateCode(scriptCode);
-                const outputstring = main(scriptCode)
-                vmoutput.innerHTML = outputstring
             }
 
             function toggleDebug(event) {
                 const checked = event.target.checked
                 console.log(event.target.checked)
                 setDebugFlag(checked)
+            }
+
+            function runCode() {
+                console.clear()
+                const vmoutput = document.querySelector('.vmoutput')
+                const code = flask.getCode();
+                const outputstring = main(code)
+                vmoutput.innerHTML = outputstring
             }
 
         </script>
@@ -56,6 +64,7 @@
         <select id="scriptz"></select>
         <input type="checkbox" id="debug" name="debug">
         <label for="debug">Show debug output</label><br>
+        <button id="run">RUN</button>
         <div class="io-container">
             <div id="editor"></div>
         </div>
