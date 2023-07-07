@@ -1,5 +1,6 @@
 import { AS_STRING, ObjString } from './object'
 import { AS_OBJ, valToString, Value } from './value'
+import { debugLog } from '.'
 
 export type Table = Map<ObjString, Value>
 
@@ -54,12 +55,12 @@ export function tableAddAll(from: Table, to: Table): void {
 // returns null if the string is not a key
 // otherwise returns the key as an ObjString
 export function tableFindString(map: Table, myString: string): ObjString | null {
-    console.log(`searching for ${myString}`)
+    debugLog(`searching for ${myString}`)
     let foundKey: ObjString | null = null
     const keys = map.keys()
     for (let i: i32 = 0; i < keys.length; i++) {
         if (keys[i].chars === myString) {
-            console.log(`found ${keys[i].chars}`)
+            debugLog(`found ${keys[i].chars}`)
             foundKey = keys[i]
         }
     }
@@ -71,14 +72,14 @@ function tableRemoveWhite(map: Table): void {}
 function markTable(map: Table): void {}
 
 function printTable(map: Table, name: string): void {
-    console.log(`== table ${name} ==`)
+    debugLog(`== table ${name} ==`)
 
     const keys: ObjString[] = map.keys()
     for (let i: i32 = 0; i < keys.length; i++) {
         const key = keys[i].chars
         const value = valToString(map.get(keys[i]))
-        console.log(`key: ${key} : value: ${value}`)
+        debugLog(`key: ${key} : value: ${value}`)
     }
 
-    console.log()
+    debugLog('')
 }

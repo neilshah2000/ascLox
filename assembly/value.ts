@@ -1,4 +1,5 @@
 import { AS_AS_STRING, AS_STRING, Obj, ObjString, ObjType, OBJ_TYPE, AS_FUNCTION, printFunction, AS_CLOSURE, ObjClosure, AS_CLASS, AS_INSTANCE, AS_BOUND_METHOD } from './object'
+import { debugLog } from '.'
 
 export enum ValueType {
     VAL_BOOL,
@@ -128,7 +129,7 @@ export class ValueArray {
     writeValueArray(value: Value): void {
         // leave out memory stuff for now bacause we use a dynamic array
 
-        // console.log(`write value ${value.toString()}`)
+        // debugLog(`write value ${value.toString()}`)
         this.values[this.count] = value
         this.count++
     }
@@ -139,7 +140,7 @@ export class ValueArray {
 }
 
 export const printValueToString = (value: Value): string => {
-    // console.log(`print ${value.toString()}`)
+    // debugLog(`print ${value.toString()}`)
     return valToString(value)
 }
 

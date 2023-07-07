@@ -3,7 +3,7 @@ import { Chunk, OpCode } from './chunk'
 import { NUMBER_VAL, OBJ_VAL, Value } from './value'
 import { disassembleChunk } from './debug'
 import { copyString, ObjFunction } from './object'
-import { printout } from '.'
+import { printout, debugLog } from '.'
 
 class Parser {
     current: Token = new Token()
@@ -106,7 +106,7 @@ function errorAt(token: Token, message: string): void {
 
     printout('COMPILE ERROR')
     printout(`${errorStr}: ${message}`)
-    console.log(`${errorStr}: ${message}`)
+    debugLog(`${errorStr}: ${message}`)
     parser.hadError = true
 }
 
@@ -120,8 +120,8 @@ function errorAtCurrent(message: string): void {
 
 // testing the scanner
 export function printTokens(source: string): void {
-    console.log()
-    console.log(`== compiled tokens ==`)
+    debugLog('')
+    debugLog(`== compiled tokens ==`)
     initScanner(source)
     let line = -1
     let lineStr = ''
@@ -138,7 +138,7 @@ export function printTokens(source: string): void {
         if (token.type == TokenType.TOKEN_EOF) break
     }
 
-    console.log(lineStr)
+    debugLog(lineStr)
 }
 
 export function compile(source: string): ObjFunction | null {
@@ -246,7 +246,7 @@ function emitConstant(value: Value): void {
 function patchJump(offset: i32): void {
     // -2 to adjust for the bytecode for the jump offset itself.
     const jump = currentChunk().count - offset - 2
-    // console.log(`patching jump value = ${jump.toString()}`)
+    // debugLog(`patching jump value = ${jump.toString()}`)
 
     if (<u16>jump > u16.MAX_VALUE) {
         error("Too much code to jump over.")
@@ -260,7 +260,7 @@ function patchJump(offset: i32): void {
 function initCompiler(compiler: Compiler, type: FunctionType): void {
     // for top level code, the enclosing compiler is null
     if (type === FunctionType.TYPE_SCRIPT) {
-        console.log('== setting up TOP LEVEL compiler ==')
+        debugLog('== setting up TOP LEVEL compiler ==')
         compiler.enclosing = null
     } else {
         compiler.enclosing = current
@@ -278,7 +278,7 @@ function initCompiler(compiler: Compiler, type: FunctionType): void {
 
     if (type !== FunctionType.TYPE_SCRIPT) {
         current.function.name = copyString(parser.previous.lexeme) // different to cLox
-        console.log(`== setting up fn ${current.function.name.chars} compiler ==`)
+        debugLog(`== setting up fn ${current.function.name.chars} compiler ==`)
     }
 
     const local: Local = new Local()
@@ -308,25 +308,25 @@ function endCompiler(): ObjFunction {
 
     // maybe we could have used function type == script to check if top level code, instead of messing about with null
     if (current.enclosing !== null) {
-        console.log(`== end enclosing compiler for fn ${current.function.name.chars} ==`)
+        debugLog(`== end enclosing compiler for fn ${current.function.name.chars} ==`)
         current = <Compiler>current.enclosing
     }
     else {
-        console.log('== end of TOP LEVEL compiler ==') // only to level compiler will have enclosing as null
+        debugLog('== end of TOP LEVEL compiler ==') // only to level compiler will have enclosing as null
     }
     return myFunction
 }
 
 function beginScope(): void {
-    console.log('beginning scope')
+    debugLog('beginning scope')
     current.scopeDepth++
 }
 
 function endScope(): void {
     current.scopeDepth--
-    console.log('ending scope')
+    debugLog('ending scope')
     while (current.localCount > 0 && current.locals[current.localCount - 1].depth > current.scopeDepth) {
-        console.log('local variable at a higher scope depth')
+        debugLog('local variable at a higher scope depth')
         if (current.locals[current.localCount - 1].isCaptured) {
             emitByte(OpCode.OP_CLOSE_UPVALUE);
         } else {
@@ -340,7 +340,7 @@ function binary(canAssign: bool): void {
     const operatorType: TokenType = parser.previous.type
     const rule: ParseRule = getRule(operatorType)
     parsePrecedence(<Precedence>(rule.precedence + 1))
-    // console.log('token type ' + operatorType.toString())
+    // debugLog('token type ' + operatorType.toString())
     switch (operatorType) {
         case TokenType.TOKEN_BANG_EQUAL:
             emitBytes(OpCode.OP_EQUAL, OpCode.OP_NOT)
@@ -474,7 +474,7 @@ function namedVariable(name: Token, canAssign: bool): void {
 }
 
 function variable(canAssign: bool): void {
-    // console.log('variable')
+    // debugLog('variable')
     namedVariable(parser.previous, canAssign)
 }
 
@@ -611,7 +611,7 @@ function identifiersEqual(a: Token, b:Token): bool {
 function resolveLocal(compiler: Compiler, name: Token): i32 {
     for (let i: i32 = compiler.localCount - 1; i >= 0; i--) {
         const local: Local = compiler.locals[i]
-        // console.log('checking local variable ' + local.name.lexeme + ', against our variable ' + name.lexeme)
+        // debugLog('checking local variable ' + local.name.lexeme + ', against our variable ' + name.lexeme)
         if (identifiersEqual(name, local.name)) {
             if (local.depth == -1) {
                 error("Can't read local variable in it's own initializer.")
@@ -625,14 +625,14 @@ function resolveLocal(compiler: Compiler, name: Token): i32 {
 
 function addUpvalue(compiler: Compiler, index: u8, isLocal: bool): i32 {
     const localStr = isLocal ? 'true' : 'false'
-    // console.log('adding upvalue to compiler with isLocal: ' + localStr)
-    // console.log('adding upvalue to compiler with index: ' + index.toString())
+    // debugLog('adding upvalue to compiler with isLocal: ' + localStr)
+    // debugLog('adding upvalue to compiler with index: ' + index.toString())
     const upvalueCount: i32 = compiler.function.upvalueCount;
 
     for (let i: i32 = 0; i < upvalueCount; i++) {
         const upvalue: Upvalue = compiler.upvalues[i];
         if (upvalue.index === index && upvalue.isLocal === isLocal) {
-            // console.log('found existing upvalue')
+            // debugLog('found existing upvalue')
             return i;
         }
     }
@@ -654,15 +654,15 @@ function resolveUpvalue(compiler: Compiler, name: Token): i32 {
   
     const local: i32 = resolveLocal(<Compiler>compiler.enclosing, name);
     if (local !== -1) {
-        console.log('adding local upvalue for ' + name.lexeme);
+        debugLog('adding local upvalue for ' + name.lexeme);
         (<Compiler>compiler.enclosing).locals[local].isCaptured = true;
         return addUpvalue(compiler, <u8>local, true);
     }
-    // console.log('local not found for ' + name.lexeme + '. Searching surrounding scope')
+    // debugLog('local not found for ' + name.lexeme + '. Searching surrounding scope')
     // recursive call to capture from further surrounding scopes
     const upvalue: i32 = resolveUpvalue(<Compiler>compiler.enclosing, name);
     if (upvalue !== -1) {
-        console.log('adding surrounding scope upvalue for ' + name.lexeme);
+        debugLog('adding surrounding scope upvalue for ' + name.lexeme);
         return addUpvalue(compiler, <u8>upvalue, false);
     }
   
@@ -676,9 +676,9 @@ function addLocal(name: Token): void {
     }
 
     const local: Local = new Local()
-    // console.log('adding to locals index ' + current.localCount.toString())
+    // debugLog('adding to locals index ' + current.localCount.toString())
     current.locals[current.localCount] = local
-    // console.log(`current.localCount ${current.localCount}`)
+    // debugLog(`current.localCount ${current.localCount}`)
     current.localCount++
 
     local.name = name
@@ -688,10 +688,10 @@ function addLocal(name: Token): void {
 }
 
 function printLocals(): void {
-    console.log('== local variables ==')
-    // console.log('locals length ' + current.locals.length.toString())
+    debugLog('== local variables ==')
+    // debugLog('locals length ' + current.locals.length.toString())
     for (let i = 0; i < current.localCount; ++i) {
-        console.log(`name: ${current.locals[i].name.lexeme}, depth: ${current.locals[i].depth}`)
+        debugLog(`name: ${current.locals[i].name.lexeme}, depth: ${current.locals[i].depth}`)
     }
 }
 
@@ -805,11 +805,11 @@ function funCompile(type: FunctionType): void {
     // for loop means variable sized encoding (depending on upvalueCount)
     for (let i:u8 = 0; i < myFunction.upvalueCount; i++) {
         if (compiler.upvalues[i].isLocal) {
-            console.log('adding local byte')
+            debugLog('adding local byte')
         } else {
-            console.log('adding surrounding scope byte')
+            debugLog('adding surrounding scope byte')
         }
-        console.log('adding index byte: ' + compiler.upvalues[i].index.toString())
+        debugLog('adding index byte: ' + compiler.upvalues[i].index.toString())
         emitByte(compiler.upvalues[i].isLocal ? 1 : 0);
         emitByte(compiler.upvalues[i].index);
     }

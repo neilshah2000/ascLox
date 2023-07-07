@@ -72,6 +72,7 @@ import { AS_STRING, IS_STRING, OBJ_TYPE, Obj, ObjFunction, ObjString, takeString
 import { freeObjects } from './memory'
 import { freeTable, initTable, Table, tableAddAll, tableDelete, tableGet, tableSet } from './table'
 import { printout } from '.'
+import { debugLog } from '.'
 
 export enum InterpretResult {
     INTERPRET_OK,
@@ -80,10 +81,10 @@ export enum InterpretResult {
 }
 
 function printObjects(): void {
-    console.log()
-    console.log(`== objects ==`)
+    debugLog('')
+    debugLog(`== objects ==`)
     traverseAndPrintObjects(vm.objects)
-    console.log()
+    debugLog('')
 }
 
 function printValueStack(): void {
@@ -98,7 +99,7 @@ function printValueStack(): void {
             }
         }
     }
-    console.log(outstr)
+    debugLog(outstr)
 }
 
 function printClosureUpvalues(myClosure: ObjClosure): string {
@@ -138,7 +139,7 @@ function runtimeError(format: string): void {
 
     printout('RUNTIME ERROR')
     printout(errorStr)
-    console.log(errorStr)
+    debugLog(errorStr)
     resetStack()
 }
 
@@ -176,17 +177,17 @@ export function freeVM(): void {
 }
 
 export function push(value: Value): void {
-    // console.log(`push value ${printValueToString(value)}`)
+    // debugLog(`push value ${printValueToString(value)}`)
     vm.stack[vm.stackTop] = value // TODO: no assignment here
     // vm.stack.push(value)
     vm.stackTop++
-    // console.log(`push so stack top index: ${vm.stackTop}`)
-    // console.log(`stack top value: ${printValueToString(vm.stack[vm.stackTop - 1])}`)
+    // debugLog(`push so stack top index: ${vm.stackTop}`)
+    // debugLog(`stack top value: ${printValueToString(vm.stack[vm.stackTop - 1])}`)
 }
 
 export function pop(): Value {
     vm.stackTop--
-    // console.log(`pop so stack top index: ${vm.stackTop}`)
+    // debugLog(`pop so stack top index: ${vm.stackTop}`)
     return vm.stack[vm.stackTop]
 }
 
@@ -321,11 +322,11 @@ function captureUpvalue(local: Value, vmLocalIndex: i32): ObjUpvalue {
 
     // TODO: location is a pointer so pointer arithmetic going on here
     if (upvalue !== null && upvalue.locationIndex === vmLocalIndex) {
-        console.log('capture upvalue found existing upvalue')
+        debugLog('capture upvalue found existing upvalue')
         return upvalue;
     }
 
-    console.log('capture upvalue creating new upvalue')
+    debugLog('capture upvalue creating new upvalue')
     const createdUpvalue: ObjUpvalue = newUpvalue(local, vmLocalIndex);
     createdUpvalue.nextUpvalue = upvalue;
 
@@ -390,7 +391,7 @@ export function run(): InterpretResult {
     /////////
     // for (let i = 0; i < vm.frameCount; i++) {
     //     const frame: CallFrame = vm.frames[i]
-    //     console.log(`frame ${i}: fn name:${frame.function.name.chars} ip: ${frame.ip}`)
+    //     debugLog(`frame ${i}: fn name:${frame.function.name.chars} ip: ${frame.ip}`)
     // }
     /////////
 
@@ -398,15 +399,15 @@ export function run(): InterpretResult {
     let frame: CallFrame = vm.frames[vm.frameCount - 1] // no closures!!!
 
     const READ_BYTE = (myFrame: CallFrame): u8 => {
-        // console.log(`reading byte from frame at ip ${myFrame.ip}`)
+        // debugLog(`reading byte from frame at ip ${myFrame.ip}`)
         return myFrame.closure.func.chunk.code[myFrame.ip++]
     }
 
     const READ_CONSTANT = (myFrame: CallFrame): Value => {
         const valueIndex = READ_BYTE(myFrame)
-        // console.log(`read constant index ${valueIndex} from frame ${vm.frameCount - 1}`)
+        // debugLog(`read constant index ${valueIndex} from frame ${vm.frameCount - 1}`)
         const constant = myFrame.closure.func.chunk.constants.values[valueIndex]
-        // console.log(`read constant ${constant}`)
+        // debugLog(`read constant ${constant}`)
         return constant
     }
 
@@ -445,8 +446,8 @@ export function run(): InterpretResult {
         return InterpretResult.INTERPRET_OK
     }
 
-    console.log()
-    console.log(`== executing bytecode in VM ==`)
+    debugLog('')
+    debugLog(`== executing bytecode in VM ==`)
     while (true) {
         ////////////////// debugging chunks at runtime
         // DEBUG_TRACE_EXECUTION
@@ -455,7 +456,7 @@ export function run(): InterpretResult {
             const valStr: string = printValueToString(vm.stack[slot])
             stackPrint = stackPrint + `[${valStr}]`
         }
-        console.log(stackPrint)
+        debugLog(stackPrint)
         // disassembleInstruction(vm.chunk, vm.ip)
         // unlike clox, we are using indexes for ip not pointers, so we dont need to 
         // minus start pointer (frame->function->chunk->code) to get the offset
@@ -483,7 +484,7 @@ export function run(): InterpretResult {
                 pop()
                 break
             case OpCode.OP_GET_LOCAL: {
-                console.log('---- before local ----')
+                debugLog('---- before local ----')
                 printValueStack()
                 const slot: u8 = READ_BYTE(frame);
 
@@ -496,7 +497,7 @@ export function run(): InterpretResult {
 
                 // push(frame.slots[slot])
                 push(vm.stack[frame.slotsIndex + slot])
-                console.log('---- after local ----')
+                debugLog('---- after local ----')
                 printValueStack()
                 break
             }
@@ -538,9 +539,9 @@ export function run(): InterpretResult {
                 // TODO: slot or vmSlotIndex to get correct upvalue??
                 // maybe dont need it because we are getting not setting
                 const myValue = frame.closure.upvalues[slot].locationValue
-                console.log('getting upvalue: ' + printValueToString(myValue) + ' from slot ' + slot.toString())
-                console.log(`frame.slotsIndex: ${frame.slotsIndex}`)
-                console.log(`vmSlotIndex: ${vmSlotIndex}`)
+                debugLog('getting upvalue: ' + printValueToString(myValue) + ' from slot ' + slot.toString())
+                debugLog(`frame.slotsIndex: ${frame.slotsIndex}`)
+                debugLog(`vmSlotIndex: ${vmSlotIndex}`)
                 printValueStack()
                 push(myValue);
                 break;
@@ -550,9 +551,9 @@ export function run(): InterpretResult {
                 const vmSlotIndex = frame.slotsIndex + slot
                 const myValue = peek(0);
                 printValueStack()
-                console.log('setting upvalue: ' + printValueToString(myValue) + ' from slot ' + slot.toString() + ' with old value ' + printValueToString(frame.closure.upvalues[slot].locationValue))
-                console.log(`frame.slotsIndex: ${frame.slotsIndex}`)
-                console.log(`vmSlotIndex: ${vmSlotIndex}`)
+                debugLog('setting upvalue: ' + printValueToString(myValue) + ' from slot ' + slot.toString() + ' with old value ' + printValueToString(frame.closure.upvalues[slot].locationValue))
+                debugLog(`frame.slotsIndex: ${frame.slotsIndex}`)
+                debugLog(`vmSlotIndex: ${vmSlotIndex}`)
 
                 /////// IMPORTANT ////////////
                 // vmSlotIndex is the slot index of the new value
@@ -677,7 +678,7 @@ export function run(): InterpretResult {
             case OpCode.OP_PRINT: {
                 const output = printValueToString(pop())
                 printout(output)
-                console.log(output)
+                debugLog(output)
                 break
             }
             case OpCode.OP_JUMP: {
@@ -731,18 +732,18 @@ export function run(): InterpretResult {
                 const myfunction: ObjFunction = AS_FUNCTION(READ_CONSTANT(frame));
                 const closure: ObjClosure = new ObjClosure(myfunction);
                 push(OBJ_VAL(closure));
-                // console.log('we walk through all of the operands after OP_CLOSURE to see what kind of upvalue each slot captures')
+                // debugLog('we walk through all of the operands after OP_CLOSURE to see what kind of upvalue each slot captures')
                 for (let i: u32 = 0; i < closure.upvalueCount; i++) {
                     const isLocal: u8 = READ_BYTE(frame);
                     const index: u8 = READ_BYTE(frame);
                     if (isLocal === 1) {
-                        // console.log('closes over local variable in enclosing function')
+                        // debugLog('closes over local variable in enclosing function')
                         // use our implementation to get the call frame slot
                         const localIndex = frame.slotsIndex + index
                         const ourValue = vm.stack[localIndex]
                         closure.upvalues[i] = captureUpvalue(ourValue, localIndex);
                     } else {
-                        // console.log('we capture an upvalue from the surrounding function')
+                        // debugLog('we capture an upvalue from the surrounding function')
                         closure.upvalues[i] = frame.closure.upvalues[index];
                     }
                 }
@@ -800,7 +801,7 @@ export function run(): InterpretResult {
 export function interpret(source: string): InterpretResult {
     printTokens(source) // testing the scanner
 
-    console.log(process.platform)
+    debugLog(process.platform)
 
     /////////////
     // const chunk: Chunk = new Chunk()

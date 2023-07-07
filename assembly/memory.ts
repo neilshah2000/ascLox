@@ -1,5 +1,6 @@
 import { Obj, ObjString, ObjType } from './object'
 import { vm } from './vm'
+import { debugLog } from '.'
 
 export const GROW_CAPACITY = (capacity: i32): i32 => {
     return capacity < 8 ? 8 : capacity * 2
@@ -27,9 +28,9 @@ export const storeCodeString = (code: string): void => {
     const storedString = load<string>(__heap_base)
     // const storedString2 = load<string>(4)
 
-    console.log(`memory stored string: ${storedString}`)
-    // console.log(`memory stored string2: ${storedString2}`)
-    console.log(__heap_base.toString())
+    debugLog(`memory stored string: ${storedString}`)
+    // debugLog(`memory stored string2: ${storedString2}`)
+    debugLog(__heap_base.toString())
 }
 
 export function freeObjects(): void {

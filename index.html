@@ -3,7 +3,7 @@
     <head>
         <script src="https://unpkg.com/codeflask/build/codeflask.min.js"></script>
         <script type="module">
-            import { main } from './build/debug.js'
+            import { main, setDebugFlag } from './build/debug.js'
             const editorElem = document.getElementById('editor');
             const flask = new CodeFlask(editorElem, { language: 'js', lineNumbers: true });
             
@@ -19,6 +19,9 @@
 
             const select = document.getElementById('scriptz');
             select.addEventListener('change', fileSelected)
+
+            const debug = document.getElementById('debug');
+            debug.addEventListener('change', toggleDebug)
             
             testFileNames.forEach((name) => {
                 var opt = document.createElement('option');
@@ -39,12 +42,20 @@
                 vmoutput.innerHTML = outputstring
             }
 
+            function toggleDebug(event) {
+                const checked = event.target.checked
+                console.log(event.target.checked)
+                setDebugFlag(checked)
+            }
+
         </script>
         <link rel="stylesheet" href="index.css">
     </head>
     <body>
         <pre class="vmoutput"></pre>
         <select id="scriptz"></select>
+        <input type="checkbox" id="debug" name="debug">
+        <label for="debug">Show debug output</label><br>
         <div class="io-container">
             <div id="editor"></div>
         </div>

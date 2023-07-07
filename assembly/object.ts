@@ -2,6 +2,7 @@ import { Table, initTable, tableFindString, tableSet } from './table'
 import { AS_OBJ, IS_OBJ, NIL_VAL, Value } from './value'
 import { vm } from './vm'
 import { Chunk } from './chunk'
+import { debugLog } from '.'
 
 export enum ObjType {
     OBJ_BOUND_METHOD,
@@ -212,7 +213,7 @@ export function copyString(myString: string): ObjString {
     // check if we already store it
     const interned: ObjString | null = tableFindString(vm.strings, myString)
     if (interned !== null) {
-        console.log('return interned string for copy')
+        debugLog('return interned string for copy')
         return interned
     }
 
@@ -245,7 +246,7 @@ export function takeString(myString: string): ObjString {
     // check if we already store it
     const interned: ObjString | null = tableFindString(vm.strings, myString)
     if (interned !== null) {
-        console.log('return interned string for take')
+        debugLog('return interned string for take')
         // FREE_ARRAY for the original string in cLox
         return interned
     }
@@ -277,7 +278,7 @@ function ALLOCATE_OBJ(type: ObjType): Obj {
     obj.nextObj = vm.objects
     vm.objects = obj
 
-    // console.log(`== allocated object ==`)
+    // debugLog(`== allocated object ==`)
     // traversePrintObjects(obj)
 
     assert(obj !== null)
@@ -294,18 +295,18 @@ export function traversePrintObjects(start: Obj | null): void {
             case ObjType.OBJ_FUNCTION:
                 const myFunctionObj = <ObjFunction>next
                 const fnStr = printFunction(myFunctionObj)
-                console.log(fnStr)
+                debugLog(fnStr)
                 break
             case ObjType.OBJ_STRING:
                 const myStringObj = <ObjString>next
-                console.log(`string: ${myStringObj.chars}`)
+                debugLog(`string: ${myStringObj.chars}`)
                 break
             case ObjType.OBJ_UPVALUE:
-                console.log("upvalue");
+                debugLog("upvalue");
                 break;
               
             default:
-                console.log('object not recognised')
+                debugLog('object not recognised')
         }
         next = next.nextObj
     }
