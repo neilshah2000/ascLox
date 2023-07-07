@@ -106,7 +106,7 @@ function errorAt(token: Token, message: string): void {
 
     printout('COMPILE ERROR')
     printout(`${errorStr}: ${message}`)
-    debugLog(`${errorStr}: ${message}`)
+    console.log(`${errorStr}: ${message}`)
     parser.hadError = true
 }
 
@@ -120,8 +120,8 @@ function errorAtCurrent(message: string): void {
 
 // testing the scanner
 export function printTokens(source: string): void {
-    debugLog('')
-    debugLog(`== compiled tokens ==`)
+    console.log('')
+    console.log(`== compiled tokens ==`)
     initScanner(source)
     let line = -1
     let lineStr = ''
@@ -138,7 +138,7 @@ export function printTokens(source: string): void {
         if (token.type == TokenType.TOKEN_EOF) break
     }
 
-    debugLog(lineStr)
+    console.log(lineStr)
 }
 
 export function compile(source: string): ObjFunction | null {

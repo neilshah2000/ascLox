@@ -446,8 +446,8 @@ export function run(): InterpretResult {
         return InterpretResult.INTERPRET_OK
     }
 
-    debugLog('')
-    debugLog(`== executing bytecode in VM ==`)
+    console.log('')
+    console.log(`== executing bytecode in VM ==`)
     while (true) {
         ////////////////// debugging chunks at runtime
         // DEBUG_TRACE_EXECUTION
