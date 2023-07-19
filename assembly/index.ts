@@ -15,6 +15,9 @@ export function setDebugFlag(flag: boolean): void {
     debugFlag = flag
     debugLog(`setting debug flag to ${flag}`)
 }
+export function getDebugFlag(): boolean {
+    return debugFlag
+}
 
 // The entry file of your WebAssembly module.
 import { interpret, freeVM, initVM, InterpretResult, VM } from './vm'

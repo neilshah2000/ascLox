@@ -71,7 +71,7 @@ import { compile, printTokens } from './compiler'
 import { AS_STRING, IS_STRING, OBJ_TYPE, Obj, ObjFunction, ObjString, takeString, ObjType, AS_FUNCTION, NativeFn, AS_NATIVE, copyString, ObjNative, ObjClosure, AS_CLOSURE, ObjUpvalue, newUpvalue, ObjClass, ObjInstance, AS_INSTANCE, IS_INSTANCE, AS_CLASS, ObjBoundMethod, AS_BOUND_METHOD, IS_CLASS } from './object'
 import { freeObjects } from './memory'
 import { freeTable, initTable, Table, tableAddAll, tableDelete, tableGet, tableSet } from './table'
-import { printout } from '.'
+import { getDebugFlag, printout } from '.'
 import { debugLog } from '.'
 
 export enum InterpretResult {
@@ -322,11 +322,11 @@ function captureUpvalue(local: Value, vmLocalIndex: i32): ObjUpvalue {
 
     // TODO: location is a pointer so pointer arithmetic going on here
     if (upvalue !== null && upvalue.locationIndex === vmLocalIndex) {
-        debugLog('capture upvalue found existing upvalue')
+        // debugLog('capture upvalue found existing upvalue')
         return upvalue;
     }
 
-    debugLog('capture upvalue creating new upvalue')
+    // debugLog('capture upvalue creating new upvalue')
     const createdUpvalue: ObjUpvalue = newUpvalue(local, vmLocalIndex);
     createdUpvalue.nextUpvalue = upvalue;
 
@@ -446,23 +446,28 @@ export function run(): InterpretResult {
         return InterpretResult.INTERPRET_OK
     }
 
-    console.log('')
-    console.log(`== executing bytecode in VM ==`)
+    debugLog('')
+    debugLog(`== executing bytecode in VM ==`)
+    const showDebug = getDebugFlag()
+    
     while (true) {
         ////////////////// debugging chunks at runtime
-        // DEBUG_TRACE_EXECUTION
-        let stackPrint = '\t\t\t  stack->\t'
-        for (let slot = 0; slot < vm.stackTop; slot++) {
-            const valStr: string = printValueToString(vm.stack[slot])
-            stackPrint = stackPrint + `[${valStr}]`
+        if (showDebug) {
+            // DEBUG_TRACE_EXECUTION
+            let stackPrint = '\t\t\t  stack->\t'
+            for (let slot = 0; slot < vm.stackTop; slot++) {
+                const valStr: string = printValueToString(vm.stack[slot])
+                stackPrint = stackPrint + `[${valStr}]`
+            }
+            debugLog(stackPrint)
+            // disassembleInstruction(vm.chunk, vm.ip)
+            // unlike clox, we are using indexes for ip not pointers, so we dont need to 
+            // minus start pointer (frame->function->chunk->code) to get the offset
+            // we already have the ip as a relative offset from beginning of bytecode
+            disassembleInstruction(frame.closure.func.chunk, frame.ip)
+            // END DEBUG_TRACE_EXECUTION
         }
-        debugLog(stackPrint)
-        // disassembleInstruction(vm.chunk, vm.ip)
-        // unlike clox, we are using indexes for ip not pointers, so we dont need to 
-        // minus start pointer (frame->function->chunk->code) to get the offset
-        // we already have the ip as a relative offset from beginning of bytecode
-        disassembleInstruction(frame.closure.func.chunk, frame.ip)
-        // END DEBUG_TRACE_EXECUTION
+        
 
         let instruction: u8 = READ_BYTE(frame)
         switch (instruction) {
@@ -484,8 +489,8 @@ export function run(): InterpretResult {
                 pop()
                 break
             case OpCode.OP_GET_LOCAL: {
-                debugLog('---- before local ----')
-                printValueStack()
+                // debugLog('---- before local ----')
+                // printValueStack()
                 const slot: u8 = READ_BYTE(frame);
 
                 // BUG HERE??
@@ -497,8 +502,8 @@ export function run(): InterpretResult {
 
                 // push(frame.slots[slot])
                 push(vm.stack[frame.slotsIndex + slot])
-                debugLog('---- after local ----')
-                printValueStack()
+                // debugLog('---- after local ----')
+                // printValueStack()
                 break
             }
             case OpCode.OP_SET_LOCAL: {
@@ -539,10 +544,10 @@ export function run(): InterpretResult {
                 // TODO: slot or vmSlotIndex to get correct upvalue??
                 // maybe dont need it because we are getting not setting
                 const myValue = frame.closure.upvalues[slot].locationValue
-                debugLog('getting upvalue: ' + printValueToString(myValue) + ' from slot ' + slot.toString())
-                debugLog(`frame.slotsIndex: ${frame.slotsIndex}`)
-                debugLog(`vmSlotIndex: ${vmSlotIndex}`)
-                printValueStack()
+                // debugLog('getting upvalue: ' + printValueToString(myValue) + ' from slot ' + slot.toString())
+                // debugLog(`frame.slotsIndex: ${frame.slotsIndex}`)
+                // debugLog(`vmSlotIndex: ${vmSlotIndex}`)
+                // printValueStack()
                 push(myValue);
                 break;
             }
@@ -550,10 +555,10 @@ export function run(): InterpretResult {
                 const slot: u8 = READ_BYTE(frame);
                 const vmSlotIndex = frame.slotsIndex + slot
                 const myValue = peek(0);
-                printValueStack()
-                debugLog('setting upvalue: ' + printValueToString(myValue) + ' from slot ' + slot.toString() + ' with old value ' + printValueToString(frame.closure.upvalues[slot].locationValue))
-                debugLog(`frame.slotsIndex: ${frame.slotsIndex}`)
-                debugLog(`vmSlotIndex: ${vmSlotIndex}`)
+                // printValueStack()
+                // debugLog('setting upvalue: ' + printValueToString(myValue) + ' from slot ' + slot.toString() + ' with old value ' + printValueToString(frame.closure.upvalues[slot].locationValue))
+                // debugLog(`frame.slotsIndex: ${frame.slotsIndex}`)
+                // debugLog(`vmSlotIndex: ${vmSlotIndex}`)
 
                 /////// IMPORTANT ////////////
                 // vmSlotIndex is the slot index of the new value
@@ -566,7 +571,7 @@ export function run(): InterpretResult {
                 // manually change the stack slot because our reference is not a pointer
                 vm.stack[slotIndexToChange] = myValue
 
-                printValueStack()
+                // printValueStack()
                 break;
             }
             case OpCode.OP_GET_PROPERTY: {
@@ -801,7 +806,7 @@ export function run(): InterpretResult {
 export function interpret(source: string): InterpretResult {
     printTokens(source) // testing the scanner
 
-    debugLog(process.platform)
+    // debugLog(process.platform)
 
     /////////////
     // const chunk: Chunk = new Chunk()
