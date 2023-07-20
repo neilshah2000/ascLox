@@ -25,7 +25,7 @@ export class CallFrame {
 
 export class VM {
     // each slot in the array references the same single CallFrame object
-    frames: StaticArray<CallFrame> = new StaticArray<CallFrame>(FRAMES_MAX).fill(new CallFrame())
+    frames: StaticArray<CallFrame> = new StaticArray<CallFrame>(FRAMES_MAX)
     frameCount: i32 = 0
 
     // chunk: Chunk = new Chunk()
@@ -41,6 +41,13 @@ export class VM {
     initString: ObjString = new ObjString()
     openUpvalues: ObjUpvalue | null = null // 1st in linked list of open upvalues
     objects: Obj | null = null
+
+    constructor() {
+        // allocate all the new CallFrames in one go when we create the VM
+        for (let i = 0; i < FRAMES_MAX; i++) {
+            this.frames[i] = new CallFrame()
+        }
+    }
 }
 
 // global variable. TODO: use @global decorator??
@@ -205,10 +212,7 @@ function call(closure: ObjClosure, argCount: u8): bool {
         return false;
     }
 
-    // create new CallFrames
-    const frame: CallFrame = new CallFrame()
-    vm.frames[vm.frameCount] = frame
-    vm.frameCount++
+    const frame: CallFrame = vm.frames[vm.frameCount++]
 
     frame.closure = closure
     // This simply initializes the next CallFrame on the stack.
