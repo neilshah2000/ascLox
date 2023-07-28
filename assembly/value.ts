@@ -8,22 +8,25 @@ export enum ValueType {
     VAL_OBJ,
 }
 
-class As {
-    boolean: bool = false
-    number: f64 = 0
-    obj: Obj = new Obj()
-}
+// class As {
+//     boolean: bool = false
+//     number: f64 = 0
+//     obj: Obj | null = null
+// }
 
 export class Value {
     type: ValueType = ValueType.VAL_NIL
-    myAs: As = new As()
+    // myAs: As = new As()
+    boolean: bool = false
+    number: f64 = 0
+    obj: Obj | null = null
 }
 
 // constructors
 export function BOOL_VAL(value: bool): Value {
     const val = new Value()
     val.type = ValueType.VAL_BOOL
-    val.myAs.boolean = value
+    val.boolean = value
     return val
 }
 
@@ -36,28 +39,28 @@ export function NIL_VAL(): Value {
 export function NUMBER_VAL(value: f64): Value {
     const val = new Value()
     val.type = ValueType.VAL_NUMBER
-    val.myAs.number = value
+    val.number = value
     return val
 }
 
 export function OBJ_VAL(obj: Obj): Value {
     const val = new Value()
     val.type = ValueType.VAL_OBJ
-    val.myAs.obj = obj
+    val.obj = obj
     return val
 }
 
 // convert back to web assembly types
 export function AS_BOOL(value: Value): bool {
-    return value.myAs.boolean
+    return value.boolean
 }
 
 export function AS_NUMBER(value: Value): f64 {
-    return value.myAs.number
+    return value.number
 }
 
 export function AS_OBJ(value: Value): Obj {
-    return value.myAs.obj
+    return <Obj>value.obj
 }
 
 // test the type of the Value
@@ -102,11 +105,11 @@ function objectToString(objectValue: Value): string {
 export function valToString(value: Value): string {
     switch (value.type) {
         case ValueType.VAL_BOOL:
-            return value.myAs.boolean ? 'true' : 'false'
+            return value.boolean ? 'true' : 'false'
         case ValueType.VAL_NIL:
             return 'nil'
         case ValueType.VAL_NUMBER:
-            return value.myAs.number.toString()
+            return value.number.toString()
         case ValueType.VAL_OBJ:
             return objectToString(value)
         default:
