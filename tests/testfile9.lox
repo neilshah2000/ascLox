@@ -1,1 +1,2 @@
-!(5 - 4 > 3 * 2 == !nil)
+// test expressions p340
+print(!(5 - 4 > 3 * 2 == !nil)); // true

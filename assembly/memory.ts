@@ -1,14 +1,25 @@
 import { Obj, ObjString, ObjType } from './object'
 import { vm } from './vm'
 import { debugLog } from '.'
+import { Value } from './value'
 
 export const GROW_CAPACITY = (capacity: i32): i32 => {
     return capacity < 8 ? 8 : capacity * 2
 }
 
-export const GROW_UINT8_ARRAY = (array: Uint8Array, oldCapacity: i32, newCapacity: i32): Uint8Array => {
-    const newArray = new Uint8Array(newCapacity)
-    newArray.set(array)
+export const GROW_UINT8_ARRAY = (array: StaticArray<u8>, oldCapacity: i32, newCapacity: i32): StaticArray<u8> => {
+    const newArray = new StaticArray<u8>(newCapacity)
+    for (let i = 0; i < array.length; i++) {
+        newArray[i] = array[i]
+    }
+    return newArray
+}
+
+export const GROW_VALUE_ARRAY = (array: StaticArray<Value>, oldCapacity: i32, newCapacity: i32): StaticArray<Value> => {
+    const newArray = new StaticArray<Value>(newCapacity)
+    for (let i = 0; i < array.length; i++) {
+        newArray[i] = array[i]
+    }
     return newArray
 }
 

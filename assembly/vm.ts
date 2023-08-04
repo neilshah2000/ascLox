@@ -24,15 +24,8 @@ export class CallFrame {
 }
 
 export class VM {
-    // each slot in the array references the same single CallFrame object
     frames: StaticArray<CallFrame> = new StaticArray<CallFrame>(FRAMES_MAX)
     frameCount: i32 = 0
-
-    // chunk: Chunk = new Chunk()
-    // //// different from clox. we dont have pointers so we just store and use the index
-    // //// instead of dereference the pointer (*ip), we use the ip array index (this.chunk.code[ip])
-    // ip: u16 = 0 // location of instruction currently being executed
-
 
     stack: StaticArray<Value> = new StaticArray<Value>(STACK_MAX).fill(new Value())
     stackTop: i32 = 0 // points to the next empty slot in the stack
@@ -135,7 +128,7 @@ function runtimeError(format: string): void {
         const myfunction: ObjFunction = frame.closure.func;
         // no pointer artithmatic needed unlike cLox, because we already have the index
         const instructionIndex: u32 = frame.ip - 1;
-        const line: u16 = myfunction.chunk.lines[instructionIndex]
+        const line: u16 = myfunction.chunk.lines[instructionIndex];
 
         errorStr = errorStr + `[line ${line}] in `
         let fnName  = ''

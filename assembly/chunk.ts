@@ -44,7 +44,7 @@ export enum OpCode {
 export class Chunk {
     count: i32
     capacity: i32 // do we needs this?? is it maintained by the Uint8Array by itself
-    code: Uint8Array /* Bytecode is a series of instructions. This is a dynamic array. Each instruction has a 1-byte opcode, most have another 1-byte constants index */
+    code: StaticArray<u8> /* Bytecode is a series of instructions. This is a dynamic array. Each instruction has a 1-byte opcode, most have another 1-byte constants index */
     lines: Uint16Array
     constants: ValueArray
 
@@ -52,7 +52,8 @@ export class Chunk {
     constructor() {
         this.count = 0
         this.capacity = 0
-        this.code = new Uint8Array(0)
+        // this.code = new Uint8Array(0)
+        this.code = new StaticArray<u8>(0)
         this.lines = new Uint16Array(0)
         this.constants = new ValueArray()
     }
@@ -61,8 +62,8 @@ export class Chunk {
         if (this.capacity < this.count + 1) {
             const oldCapacity: i32 = this.capacity
             this.capacity = GROW_CAPACITY(oldCapacity)
-            this.code = GROW_UINT8_ARRAY(this.code, oldCapacity, this.capacity * 2)
-            this.lines = GROW_UINT16_ARRAY(this.lines, oldCapacity, this.capacity * 2)
+            this.code = GROW_UINT8_ARRAY(this.code, oldCapacity, this.capacity)
+            this.lines = GROW_UINT16_ARRAY(this.lines, oldCapacity, this.capacity)
         }
 
         // argument is i32 to accept enums, but we only store u8
@@ -85,7 +86,7 @@ export class Chunk {
         // initChunk()
         this.count = 0
         this.capacity = 0
-        this.code = new Uint8Array(0)
+        this.code = new StaticArray<u8>(0)
         this.lines = new Uint16Array(0)
         this.constants = new ValueArray()
     }

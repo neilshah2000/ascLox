@@ -1,5 +1,6 @@
 import { AS_AS_STRING, AS_STRING, Obj, ObjString, ObjType, OBJ_TYPE, AS_FUNCTION, printFunction, AS_CLOSURE, ObjClosure, AS_CLASS, AS_INSTANCE, AS_BOUND_METHOD } from './object'
 import { debugLog } from '.'
+import { GROW_CAPACITY, GROW_VALUE_ARRAY } from './memory'
 
 export enum ValueType {
     VAL_BOOL,
@@ -8,15 +9,8 @@ export enum ValueType {
     VAL_OBJ,
 }
 
-// class As {
-//     boolean: bool = false
-//     number: f64 = 0
-//     obj: Obj | null = null
-// }
-
 export class Value {
     type: ValueType = ValueType.VAL_NIL
-    // myAs: As = new As()
     boolean: bool = false
     number: f64 = 0
     obj: Obj | null = null
@@ -120,17 +114,21 @@ export function valToString(value: Value): string {
 export class ValueArray {
     count: i32
     capacity: i32 // do we needs this?? is it maintained by the Uint8Array by itself
-    values: Value[]
+    values: StaticArray<Value>
 
     // same as initValueArray()
     constructor() {
         this.count = 0
         this.capacity = 0
-        this.values = new Array<Value>(0)
+        this.values = new StaticArray<Value>(0)
     }
 
     writeValueArray(value: Value): void {
-        // leave out memory stuff for now bacause we use a dynamic array
+        if (this.capacity < this.count + 1) {
+            const oldCapacity: i32 = this.capacity
+            this.capacity = GROW_CAPACITY(oldCapacity)
+            this.values = GROW_VALUE_ARRAY(this.values, oldCapacity, this.capacity)
+        }
 
         // debugLog(`write value ${value.toString()}`)
         this.values[this.count] = value
@@ -138,7 +136,7 @@ export class ValueArray {
     }
 
     freeValueArray(): void {
-        this.values = new Array<Value>(0)
+        this.values = new StaticArray<Value>(0)
     }
 }
 

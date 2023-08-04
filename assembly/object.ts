@@ -125,7 +125,7 @@ export class ObjBoundMethod extends Obj{
         this.receiver = receiver
         this.method = method
     }
-} ;
+};
 
 // returns the type of object from the value
 export function OBJ_TYPE(value: Value): ObjType {

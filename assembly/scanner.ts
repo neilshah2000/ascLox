@@ -90,10 +90,7 @@ export const tokenTypeStrings: string[] = [
 ]
 
 export class Token {
-    // TODO: not using pointers so we don't have the original string here
     type: TokenType = TokenType.TOKEN_ERROR
-    // start: u32 = 0
-    // length: u32 = 0
     lexeme: string = ''
     line: u16 = 0
 }

@@ -6,17 +6,74 @@
             import { main, setDebugFlag } from './build/debug.js'
             const editorElem = document.getElementById('editor');
             const flask = new CodeFlask(editorElem, { language: 'js', lineNumbers: true });
-            
 
-            const testFileNames = ['testfile16.lox', 'testfile23.lox',  'testfile30.lox',  'testfile35.lox',  'testfile41.lox',  'testfile49.lox',  'testfile8.lox',
-                'testfile1.lox', 'testfile17.lox', 'testfile24.lox', 'testfile31.lox', 'testfile35b.lox', 'testfile42.lox', 'testfile5.lox', 'testfile9.lox',
-                'testfile10.lox', 'testfile18.lox', 'testfile25.lox', 'testfile32.lox', 'testfile36.lox', 'testfile43.lox', 'testfile50.lox',
-                'testfile11.lox', 'testfile19.lox', 'testfile26.lox', 'testfile33.lox', 'testfile37.lox', 'testfile44.lox', 'testfile51.lox',
-                'testfile12.lox', 'testfile2.lox', 'testfile27.lox', 'testfile34.lox', 'testfile38.lox', 'testfile45.lox', 'testfile52.lox',
-                'testfile13.lox', 'testfile20.lox', 'testfile28.lox', 'testfile34b.lox', 'testfile39.lox', 'testfile46.lox', 'testfile53.lox',
-                'testfile14.lox', 'testfile21.lox', 'testfile29.lox', 'testfile34c.lox', 'testfile4.lox', 'testfile47.lox', 'testfile6.lox',
-                'testfile15.lox', 'testfile22.lox', 'testfile3.lox', 'testfile34d.lox', 'testfile40.lox', 'testfile48.lox', 'testfile7.lox', 'testfile-fib.lox', 'testfile-benchmark.lox']
-            
+            const testFileNames = [
+                "testfile1.lox",
+                "testfile2.lox",
+                "testfile3.lox",
+                "testfile4.lox",
+                "testfile5.lox",
+                "testfile6.lox",
+                "testfile7.lox",
+                "testfile8.lox",
+                "testfile9.lox",
+
+                "testfile10.lox",
+                "testfile11.lox",
+                "testfile12.lox",
+                "testfile13.lox",
+                "testfile14.lox",
+                "testfile15.lox",
+                "testfile16.lox",
+                "testfile17.lox",
+                "testfile18.lox",
+                "testfile19.lox",
+                
+                "testfile20.lox",
+                "testfile21.lox",
+                "testfile22.lox",
+                "testfile23.lox",
+                "testfile24.lox",
+                "testfile25.lox",
+                "testfile26.lox",
+                "testfile27.lox",
+                "testfile28.lox",
+                "testfile29.lox",
+                
+                "testfile30.lox",
+                "testfile31.lox",
+                "testfile32.lox",
+                "testfile33.lox",
+                "testfile34.lox",
+                "testfile34b.lox",
+                "testfile34c.lox",
+                "testfile34d.lox",
+                "testfile35.lox",
+                "testfile35b.lox",
+                "testfile36.lox",
+                "testfile37.lox",
+                "testfile38.lox",
+                "testfile39.lox",
+                
+                "testfile40.lox",
+                "testfile41.lox",
+                "testfile42.lox",
+                "testfile43.lox",
+                "testfile44.lox",
+                "testfile45.lox",
+                "testfile46.lox",
+                "testfile47.lox",
+                "testfile48.lox",
+                "testfile49.lox",
+                
+                "testfile50.lox",
+                "testfile51.lox",
+                "testfile52.lox",
+                "testfile53.lox",
+                
+                "testfile-benchmark.lox",
+                "testfile-fib.lox",
+            ]
                 
             const select = document.getElementById('scriptz');
             select.addEventListener('change', fileSelected)

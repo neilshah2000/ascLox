@@ -252,8 +252,8 @@ function patchJump(offset: i32): void {
         error("Too much code to jump over.")
     }
 
-    currentChunk().code[offset] = (jump >> 8) & 0xff
-    currentChunk().code[offset + 1] = jump & 0xff
+    currentChunk().code[offset] = <u8>((jump >> 8) & 0xff)
+    currentChunk().code[offset + 1] = <u8>(jump & 0xff)
 }
 
 // TODO: can't pass a pointer and initialize it here
