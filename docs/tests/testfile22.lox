@@ -1,0 +1,23 @@
+{
+    var a = "a1";
+    var b = "b1";
+    var c = "c1";
+    var d = "d1";
+    var e = "e1";
+    {
+        var a = "a2";
+        var b = "b2";
+        var c = "c2";
+        var d = "d2";
+        var e = "e2";
+        {
+            var a = "a3";
+            var b = "b3";
+            var c = "c3";
+            var d = "d3";
+            var e = "e3";
+        }
+        print b;
+    }
+    print b;
+}

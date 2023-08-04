@@ -1,0 +1,9 @@
+// test local variable initialization
+
+{
+    var a = "outer";
+    {
+        var a = a; // error
+    }
+
+}

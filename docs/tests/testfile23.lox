@@ -1,0 +1,6 @@
+{
+    var a = "another";
+    var b = "before";
+    print a;
+    print b;
+}

@@ -92,9 +92,9 @@
             })
 
             async function fileSelected(event) {
-                const host = 'https://raw.githubusercontent.com/neilshah2000/ascLox/main'
+                // const host = 'https://raw.githubusercontent.com/neilshah2000/ascLox/main'
                 const fileName = event.target.value
-                const response = await fetch(`${host}/tests/${fileName}`)
+                const response = await fetch(`/docs/tests/${fileName}`)
                 const scriptCode = await response.text()
                 flask.updateCode(scriptCode);
             }

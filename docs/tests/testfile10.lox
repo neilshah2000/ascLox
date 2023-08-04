@@ -1,0 +1,2 @@
+// test strings p352
+print "te" + "st"; // "test"
