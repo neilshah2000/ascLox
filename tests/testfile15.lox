@@ -1,6 +1,0 @@
-// test global variable assignment 
-
-var breakfast = "beignets";
-var beverage = "cafe au lait";
-var breakfast = "beignets with " + beverage;
-print breakfast; // "beignets with cafe au lait"

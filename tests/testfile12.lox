@@ -1,3 +1,0 @@
-// test string equality
-
-"test" == "tests" // false

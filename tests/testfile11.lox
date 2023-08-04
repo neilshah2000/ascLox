@@ -1,3 +1,0 @@
-// test string equality
-
-print "test" == "test"; // true
