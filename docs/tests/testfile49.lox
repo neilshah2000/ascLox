@@ -1,3 +1,5 @@
+// test 'this' in function resolves too class instance
+
 class Nested {
     method() {
         fun function() {

@@ -1,3 +1,5 @@
+// test undefined property error
+
 class Brunch {
     eggs() {}
 }

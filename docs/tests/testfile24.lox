@@ -1,3 +1,5 @@
+// test logical statements
+
 if (true) {
     print "if statement true";
 }

@@ -1,3 +1,5 @@
+// test assignment order
+
 {
     var a = "another";
     var b = "before";

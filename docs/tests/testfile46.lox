@@ -1,3 +1,5 @@
+// test assigning method closure
+
 class Brunch {
     eggs() {}
 }

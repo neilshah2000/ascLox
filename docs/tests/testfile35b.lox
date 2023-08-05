@@ -1,3 +1,5 @@
+// test closure when variable is already off the stack
+
 fun outer() {
   var x = "value";
   fun middle() {

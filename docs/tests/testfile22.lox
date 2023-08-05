@@ -1,3 +1,5 @@
+// test nested blocks and multiple assignment
+
 {
     var a = "a1";
     var b = "b1";

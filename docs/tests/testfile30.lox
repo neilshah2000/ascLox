@@ -1,3 +1,5 @@
+// test errors showing call stack
+
 fun areWeHavingItYet() {
     print "Yes we are!";
 }

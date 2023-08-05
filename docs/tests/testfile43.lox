@@ -1,2 +1,4 @@
+// test class instance print
+
 class Brioche {}
 print Brioche();

@@ -1,3 +1,5 @@
+// test classes handle both field and method access
+
 class Oops {
   init() {
     fun f() {

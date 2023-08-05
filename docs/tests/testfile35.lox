@@ -1,3 +1,5 @@
+// test closure with multiple nested scopes
+
 fun outer() {
   var a = 1;
   var b = 2;

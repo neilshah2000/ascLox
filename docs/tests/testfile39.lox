@@ -1,3 +1,5 @@
+// test each closures work on variables not values
+
 var globalSet;
 var globalGet;
 var k;

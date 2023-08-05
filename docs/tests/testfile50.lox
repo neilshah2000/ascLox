@@ -1,3 +1,5 @@
+// test illegall this usage
+
 print this; // At top level.
 
 fun notMethod() {

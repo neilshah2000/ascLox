@@ -1,3 +1,5 @@
+// test function literal printing
+
 fun areWeHavingItYet() {
     print "Yes we are!";
 }

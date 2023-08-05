@@ -1,3 +1,5 @@
+// test variable hoisted off steck
+
 fun outer() {
   var y = "y-something";
   var x = "outside";

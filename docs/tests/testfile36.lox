@@ -1,3 +1,5 @@
+// test assigning to a closed over value
+
 fun outer() {
   var x = "before";
   fun inner() {

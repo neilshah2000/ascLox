@@ -1,3 +1,5 @@
+// test block statements and assignment
+
 {
     var a = "a";
     var b = "b";

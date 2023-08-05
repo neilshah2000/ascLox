@@ -1,3 +1,5 @@
+// test closures for already returned functions
+
 fun makeClosure() {
   var local = "local";
   fun closure() {

@@ -1,2 +1,4 @@
+// test class print
+
 class Brioche {}
 print Brioche;

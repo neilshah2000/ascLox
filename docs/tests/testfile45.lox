@@ -1,3 +1,5 @@
+// test class methods
+
 class Brunch {
     bacon() {}
     eggs() {}

@@ -1,3 +1,5 @@
+// test class properties
+
 class Pair {}
 
 var pair = Pair();

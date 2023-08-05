@@ -1,3 +1,5 @@
+// test functions with returns
+
 fun areWeHavingItYet() {
     return "Yes we are!";
 }

@@ -1,3 +1,5 @@
+// test closures
+
 var x = "global";
 fun outer() {
     var x = "outer";

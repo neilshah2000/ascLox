@@ -1,3 +1,5 @@
+// test functions without returns
+
 fun areWeHavingItYet() {
     print "Yes we are!";
 }
