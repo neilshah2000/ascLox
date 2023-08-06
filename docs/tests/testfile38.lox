@@ -1,4 +1,4 @@
-// test variable hoisted off steck
+// test variable hoisted off stack
 
 fun outer() {
   var y = "y-something";

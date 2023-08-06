@@ -1,4 +1,4 @@
-// test reading global variables p392
+// test reading global variables
 
 var beverage = "cafe au lait";
 var breakfast = "beignets with " + beverage;
